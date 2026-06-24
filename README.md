@@ -1,4 +1,4 @@
-# KeyFort 🔑
+# Mini2FA 🔑
 
 An extremely lightweight, secure, and reliable two-factor authenticator (2FA) focused on TOTP verification code generation.
 
@@ -16,9 +16,9 @@ An extremely lightweight, secure, and reliable two-factor authenticator (2FA) fo
 *   **Scanning**: ML Kit / ZXing
 *   **Encryption**: Android Keystore + AES
 
-## 🤔 Why Choose KeyFort?
+## 🤔 Why Choose Mini2FA?
 
-Most authenticators on the market are bloated, feature-heavy, and have a large footprint. KeyFort does only one thing: securely and quickly generate TOTP verification codes.
+Most authenticators on the market are bloated, feature-heavy, and have a large footprint. Mini2FA does only one thing: securely and quickly generate TOTP verification codes.
 
 We believe that security tools should not be a burden.
 
