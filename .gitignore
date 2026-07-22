@@ -32,10 +32,8 @@ ENV/
 *.swo
 *~
 
-# Test
+# Test (private test data)
 test/
-tests/
-pytest.ini
 .coverage
 htmlcov/
 

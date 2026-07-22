@@ -1,0 +1,582 @@
+"""
+存储模块单元测试
+"""
+import os
+import sys
+import json
+import tempfile
+from pathlib import Path
+
+# 添加项目路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from core.storage import StorageManager
+from core.crypto import CryptoManager
+
+
+class TestStorageManagerInit:
+    """测试 StorageManager 初始化"""
+
+    def test_create_new_database(self, tmp_dir):
+        """测试创建新数据库"""
+        db_path = os.path.join(tmp_dir, 'test.db')
+        key_path = os.path.join(tmp_dir, 'master.key')
+
+        crypto = CryptoManager(key_path)
+        crypto.initialize('password')
+
+        storage = StorageManager(db_path, crypto)
+
+        assert os.path.exists(db_path)
+
+    def test_create_tables(self, tmp_dir):
+        """测试创建表"""
+        db_path = os.path.join(tmp_dir, 'test.db')
+        key_path = os.path.join(tmp_dir, 'master.key')
+
+        crypto = CryptoManager(key_path)
+        crypto.initialize('password')
+
+        storage = StorageManager(db_path, crypto)
+
+        # 验证表存在
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cursor.fetchall()]
+        conn.close()
+
+        assert 'accounts' in tables
+
+
+class TestAddAccount:
+    """测试添加账号"""
+
+    def setup_method(self):
+        """每个测试前创建临时存储"""
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, 'test.db')
+        self.key_path = os.path.join(self.tmpdir, 'master.key')
+
+        self.crypto = CryptoManager(self.key_path)
+        self.crypto.initialize('password')
+
+        self.storage = StorageManager(self.db_path, self.crypto)
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_add_basic_account(self):
+        """测试添加基本账号"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        assert account_id is not None
+        assert account_id > 0
+
+    def test_add_account_with_all_fields(self):
+        """测试添加包含所有字段的账号"""
+        account_id = self.storage.add_account(
+            issuer='GitHub',
+            account='user@github.com',
+            secret='JBSWY3DPEHPK3PXP',
+            algorithm='SHA256',
+            digits=8,
+            period=60,
+            category='work',
+            notes='Test account'
+        )
+
+        assert account_id is not None
+
+        # 验证存储
+        account = self.storage.get_account(account_id)
+        assert account.issuer == 'GitHub'
+        assert account.account == 'user@github.com'
+        assert account.algorithm == 'SHA256'
+        assert account.digits == 8
+        assert account.period == 60
+        assert account.category == 'work'
+        assert account.notes == 'Test account'
+
+    def test_add_duplicate_account(self):
+        """测试添加重复账号"""
+        self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        try:
+            self.storage.add_account(
+                issuer='Google',
+                account='user@gmail.com',
+                secret='JBSWY3DPEHPK3PXP'
+            )
+            assert False, "应该抛出异常"
+        except ValueError as e:
+            assert '已存在' in str(e)
+
+    def test_add_account_with_defaults(self):
+        """测试使用默认值添加账号"""
+        account_id = self.storage.add_account(
+            issuer='Test',
+            account='test@test.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        account = self.storage.get_account(account_id)
+        assert account.algorithm == 'SHA1'
+        assert account.digits == 6
+        assert account.period == 30
+        assert account.category == 'default'
+
+
+class TestGetAccount:
+    """测试获取账号"""
+
+    def setup_method(self):
+        """每个测试前创建临时存储"""
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, 'test.db')
+        self.key_path = os.path.join(self.tmpdir, 'master.key')
+
+        self.crypto = CryptoManager(self.key_path)
+        self.crypto.initialize('password')
+
+        self.storage = StorageManager(self.db_path, self.crypto)
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_get_existing_account(self):
+        """测试获取存在的账号"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        account = self.storage.get_account(account_id)
+
+        assert account is not None
+        assert account.issuer == 'Google'
+        assert account.account == 'user@gmail.com'
+
+    def test_get_nonexistent_account(self):
+        """测试获取不存在的账号"""
+        account = self.storage.get_account(999)
+
+        assert account is None
+
+
+class TestGetAllAccounts:
+    """测试获取所有账号"""
+
+    def setup_method(self):
+        """每个测试前创建临时存储"""
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, 'test.db')
+        self.key_path = os.path.join(self.tmpdir, 'master.key')
+
+        self.crypto = CryptoManager(self.key_path)
+        self.crypto.initialize('password')
+
+        self.storage = StorageManager(self.db_path, self.crypto)
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_get_all_empty(self):
+        """测试获取空列表"""
+        accounts = self.storage.get_all_accounts()
+
+        assert accounts == []
+
+    def test_get_all_multiple(self):
+        """测试获取多个账号"""
+        self.storage.add_account(
+            issuer='Google',
+            account='user1@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        self.storage.add_account(
+            issuer='GitHub',
+            account='user2@github.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        accounts = self.storage.get_all_accounts()
+
+        assert len(accounts) == 2
+
+    def test_get_all_with_category(self):
+        """测试按分类获取账号"""
+        self.storage.add_account(
+            issuer='Google',
+            account='user1@gmail.com',
+            secret='JBSWY3DPEHPK3PXP',
+            category='personal'
+        )
+
+        self.storage.add_account(
+            issuer='GitHub',
+            account='user2@github.com',
+            secret='JBSWY3DPEHPK3PXP',
+            category='work'
+        )
+
+        # 获取所有
+        all_accounts = self.storage.get_all_accounts()
+        assert len(all_accounts) == 2
+
+        # 按分类获取
+        personal_accounts = self.storage.get_all_accounts(category='personal')
+        assert len(personal_accounts) == 1
+
+        work_accounts = self.storage.get_all_accounts(category='work')
+        assert len(work_accounts) == 1
+
+
+class TestGetSecret:
+    """测试获取密钥"""
+
+    def setup_method(self):
+        """每个测试前创建临时存储"""
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, 'test.db')
+        self.key_path = os.path.join(self.tmpdir, 'master.key')
+
+        self.crypto = CryptoManager(self.key_path)
+        self.crypto.initialize('password')
+
+        self.storage = StorageManager(self.db_path, self.crypto)
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_get_secret(self):
+        """测试获取密钥"""
+        secret = 'JBSWY3DPEHPK3PXP'
+
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret=secret
+        )
+
+        retrieved_secret = self.storage.get_secret(account_id)
+
+        assert retrieved_secret == secret
+
+    def test_get_secret_nonexistent(self):
+        """测试获取不存在的密钥"""
+        try:
+            self.storage.get_secret(999)
+            assert False, "应该抛出异常"
+        except ValueError as e:
+            assert '不存在' in str(e)
+
+
+class TestUpdateAccount:
+    """测试更新账号"""
+
+    def setup_method(self):
+        """每个测试前创建临时存储"""
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, 'test.db')
+        self.key_path = os.path.join(self.tmpdir, 'master.key')
+
+        self.crypto = CryptoManager(self.key_path)
+        self.crypto.initialize('password')
+
+        self.storage = StorageManager(self.db_path, self.crypto)
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_update_issuer(self):
+        """测试更新服务商"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        result = self.storage.update_account(account_id, issuer='Google LLC')
+        assert result is True
+
+        account = self.storage.get_account(account_id)
+        assert account.issuer == 'Google LLC'
+
+    def test_update_account_name(self):
+        """测试更新账号名"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        result = self.storage.update_account(account_id, account='newuser@gmail.com')
+        assert result is True
+
+        account = self.storage.get_account(account_id)
+        assert account.account == 'newuser@gmail.com'
+
+    def test_update_category(self):
+        """测试更新分类"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        result = self.storage.update_account(account_id, category='work')
+        assert result is True
+
+        account = self.storage.get_account(account_id)
+        assert account.category == 'work'
+
+    def test_update_notes(self):
+        """测试更新备注"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        result = self.storage.update_account(account_id, notes='New notes')
+        assert result is True
+
+        account = self.storage.get_account(account_id)
+        assert account.notes == 'New notes'
+
+    def test_update_multiple_fields(self):
+        """测试更新多个字段"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        result = self.storage.update_account(
+            account_id,
+            issuer='Google LLC',
+            account='newuser@gmail.com',
+            category='work'
+        )
+        assert result is True
+
+        account = self.storage.get_account(account_id)
+        assert account.issuer == 'Google LLC'
+        assert account.account == 'newuser@gmail.com'
+        assert account.category == 'work'
+
+    def test_update_no_fields(self):
+        """测试不更新任何字段"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        result = self.storage.update_account(account_id)
+        assert result is False
+
+    def test_update_nonexistent_account(self):
+        """测试更新不存在的账号"""
+        result = self.storage.update_account(999, issuer='Test')
+        assert result is False
+
+    def test_update_disallowed_field(self):
+        """测试更新不允许的字段"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        # 尝试更新不允许的字段（如 algorithm）
+        result = self.storage.update_account(account_id, algorithm='SHA256')
+        assert result is False  # 没有允许的字段被更新
+
+
+class TestDeleteAccount:
+    """测试删除账号"""
+
+    def setup_method(self):
+        """每个测试前创建临时存储"""
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, 'test.db')
+        self.key_path = os.path.join(self.tmpdir, 'master.key')
+
+        self.crypto = CryptoManager(self.key_path)
+        self.crypto.initialize('password')
+
+        self.storage = StorageManager(self.db_path, self.crypto)
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_delete_existing_account(self):
+        """测试删除存在的账号"""
+        account_id = self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        result = self.storage.delete_account(account_id)
+        assert result is True
+
+        # 验证已删除
+        account = self.storage.get_account(account_id)
+        assert account is None
+
+    def test_delete_nonexistent_account(self):
+        """测试删除不存在的账号"""
+        result = self.storage.delete_account(999)
+        assert result is False
+
+
+class TestExportImport:
+    """测试导入导出"""
+
+    def setup_method(self):
+        """每个测试前创建临时存储"""
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, 'test.db')
+        self.key_path = os.path.join(self.tmpdir, 'master.key')
+
+        self.crypto = CryptoManager(self.key_path)
+        self.crypto.initialize('password')
+
+        self.storage = StorageManager(self.db_path, self.crypto)
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_export_empty(self):
+        """测试导出空数据库"""
+        export_path = os.path.join(self.tmpdir, 'export.json')
+
+        count = self.storage.export_json(export_path)
+
+        assert count == 0
+        assert os.path.exists(export_path)
+
+        # 验证文件内容
+        with open(export_path, 'r') as f:
+            data = json.load(f)
+
+        assert data['version'] == 1
+        assert 'exported_at' in data
+        assert data['accounts'] == []
+
+    def test_export_with_accounts(self):
+        """测试导出包含账号的数据库"""
+        self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        self.storage.add_account(
+            issuer='GitHub',
+            account='user@github.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        export_path = os.path.join(self.tmpdir, 'export.json')
+        count = self.storage.export_json(export_path)
+
+        assert count == 2
+
+        # 验证文件内容
+        with open(export_path, 'r') as f:
+            data = json.load(f)
+
+        assert len(data['accounts']) == 2
+
+    def test_import_empty(self):
+        """测试导入空文件"""
+        export_path = os.path.join(self.tmpdir, 'export.json')
+
+        # 创建空导出文件
+        with open(export_path, 'w') as f:
+            json.dump({
+                'version': 1,
+                'exported_at': '2026-01-01T00:00:00',
+                'accounts': []
+            }, f)
+
+        count = self.storage.import_json(export_path)
+        assert count == 0
+
+    def test_export_import_cycle(self):
+        """测试导出再导入的完整流程"""
+        # 添加账号
+        self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP',
+            category='personal'
+        )
+
+        # 导出
+        export_path = os.path.join(self.tmpdir, 'export.json')
+        self.storage.export_json(export_path)
+
+        # 创建新的存储（使用相同的密钥）
+        new_db_path = os.path.join(self.tmpdir, 'new.db')
+        new_storage = StorageManager(new_db_path, self.crypto)
+
+        # 导入
+        count = new_storage.import_json(export_path)
+        assert count == 1
+
+        # 验证导入的数据
+        accounts = new_storage.get_all_accounts()
+        assert len(accounts) == 1
+        assert accounts[0].issuer == 'Google'
+        assert accounts[0].account == 'user@gmail.com'
+        assert accounts[0].category == 'personal'
+
+    def test_import_duplicate_accounts(self):
+        """测试导入重复账号"""
+        # 添加账号
+        self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        # 导出
+        export_path = os.path.join(self.tmpdir, 'export.json')
+        self.storage.export_json(export_path)
+
+        # 尝试导入（应该跳过重复）
+        count = self.storage.import_json(export_path)
+        assert count == 0  # 没有新账号被导入
+
+        # 验证只有一个账号
+        accounts = self.storage.get_all_accounts()
+        assert len(accounts) == 1

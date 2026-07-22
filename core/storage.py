@@ -147,6 +147,10 @@ class StorageManager:
 
     def update_account(self, account_id: int, **kwargs) -> bool:
         """更新账号信息"""
+        # 检查账号是否存在
+        if not self.get_account(account_id):
+            return False
+
         allowed_fields = {'issuer', 'account', 'category', 'notes'}
         updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
 
