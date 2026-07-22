@@ -8,6 +8,7 @@ import sys
 import time
 import subprocess
 import platform
+import getpass
 from pathlib import Path
 from datetime import datetime
 
@@ -445,12 +446,12 @@ def main():
         print("首次使用，请设置主密码：")
         print("⚠️  请牢记此密码，丢失将无法恢复数据！\n")
 
-        pwd = input("输入主密码: ")
+        pwd = getpass.getpass("输入主密码: ")
         if len(pwd) < 6:
             print("✗ 密码长度至少 6 位！")
             sys.exit(1)
 
-        pwd_confirm = input("确认主密码: ")
+        pwd_confirm = getpass.getpass("确认主密码: ")
         if pwd != pwd_confirm:
             print("✗ 两次密码不一致！")
             sys.exit(1)
@@ -472,7 +473,7 @@ def main():
             print(f"💡 密码提示：{hint}")
 
         for attempt in range(3):
-            pwd = input(">>> ")
+            pwd = getpass.getpass(">>> ")
             if crypto.initialize(pwd):
                 print("✓ 密码验证成功！\n")
                 break
