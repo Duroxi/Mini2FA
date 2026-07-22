@@ -87,7 +87,7 @@ def display_account_with_code(account, secret: str):
 │                                                     │
 │  有效期: [{progress}] {remaining:2d}s                    │
 │                                                     │
-│  按 Enter 复制到剪贴板 | 输入 q 返回菜单            │
+│  按 Enter 复制到剪贴板 | 输入 q 返回列表            │
 └─────────────────────────────────────────────────────┘
 """)
 
@@ -219,7 +219,11 @@ def handle_view_code(storage: StorageManager):
             continue
 
         account = accounts[idx - 1]
-        secret = storage.get_secret(account.id)
+        try:
+            secret = storage.get_secret(account.id)
+        except Exception as e:
+            print(f"✗ 获取密钥失败: {e}")
+            continue
 
         # 进入详情页
         try:
