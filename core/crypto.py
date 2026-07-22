@@ -27,12 +27,13 @@ class CryptoManager:
         self.master_key_path = master_key_path
         self.key = None  # 派生密钥
 
-    def initialize(self, master_password: str) -> bool:
+    def initialize(self, master_password: str, hint: str = '') -> bool:
         """
         初始化或加载主密钥
 
         Args:
             master_password: 用户主密码
+            hint: 密保提示（首次设置时使用）
 
         Returns:
             是否成功
@@ -42,9 +43,9 @@ class CryptoManager:
             return self._load_key(master_password)
         else:
             # 首次使用，创建新密钥
-            return self._create_key(master_password)
+            return self._create_key(master_password, hint)
 
-    def _create_key(self, master_password: str) -> bool:
+    def _create_key(self, master_password: str, hint: str = '') -> bool:
         """创建新的主密钥文件"""
         salt = os.urandom(SALT_SIZE)
 
@@ -71,6 +72,7 @@ class CryptoManager:
             'salt': base64.b64encode(salt).decode(),
             'nonce': base64.b64encode(nonce).decode(),
             'encrypted_key': base64.b64encode(encrypted_master).decode(),
+            'hint': hint,  # 密保提示（明文存储）
             'version': 1
         }
 
@@ -79,6 +81,18 @@ class CryptoManager:
 
         self.key = master_key
         return True
+
+    def get_hint(self) -> str:
+        """获取密保提示"""
+        if not os.path.exists(self.master_key_path):
+            return ''
+
+        try:
+            with open(self.master_key_path, 'r') as f:
+                data = json.load(f)
+            return data.get('hint', '')
+        except Exception:
+            return ''
 
     def _load_key(self, master_password: str) -> bool:
         """从文件加载主密钥"""

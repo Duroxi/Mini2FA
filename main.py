@@ -455,13 +455,22 @@ def main():
             print("✗ 两次密码不一致！")
             sys.exit(1)
 
-        if crypto.initialize(pwd):
+        # 设置密保提示
+        hint = input("设置密码提示（用于忘记密码时提醒，可留空）: ").strip()
+
+        if crypto.initialize(pwd, hint):
             print("✓ 主密码已设置成功！\n")
         else:
             print("✗ 初始化失败！")
             sys.exit(1)
     else:
+        # 获取密保提示
+        hint = crypto.get_hint()
+
         print("请输入主密码：")
+        if hint:
+            print(f"💡 密码提示：{hint}")
+
         for attempt in range(3):
             pwd = input(">>> ")
             if crypto.initialize(pwd):
@@ -470,6 +479,8 @@ def main():
             remaining = 2 - attempt
             if remaining > 0:
                 print(f"✗ 密码错误！剩余 {remaining} 次机会")
+                if hint:
+                    print(f"💡 密码提示：{hint}")
         else:
             print("✗ 密码错误次数过多，程序退出")
             sys.exit(1)
