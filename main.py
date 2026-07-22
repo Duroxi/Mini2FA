@@ -112,12 +112,10 @@ def display_menu():
 ╠═══════════════════════════════════════════════════════════╣
 ║  1. 📱  添加账号（扫码图片）                              ║
 ║  2. 🔑  查看验证码                                        ║
-║  3. 📋  账号列表                                          ║
-║  4. ✏️   编辑账号                                          ║
-║  5. 🗑️   删除账号                                          ║
-║  6. 💾  导出备份                                          ║
-║  7. 📥  导入备份                                          ║
-║  8. 🔄  刷新当前验证码                                    ║
+║  3. ✏️   编辑账号                                          ║
+║  4. 🗑️   删除账号                                          ║
+║  5. 💾  导出备份                                          ║
+║  6. 📥  导入备份                                          ║
 ║  0. 🚪  退出                                              ║
 ╚═══════════════════════════════════════════════════════════╝
     """)
@@ -191,75 +189,61 @@ def handle_add_account(storage: StorageManager):
 
 
 def handle_view_code(storage: StorageManager):
-    """处理查看验证码"""
+    """统一查看验证码（列表 + 详情 + 复制）"""
     accounts = storage.get_all_accounts()
     if not accounts:
         print("\n暂无账号，请先添加。")
         return
 
-    print("\n选择账号查看验证码：")
-    print("-" * 60)
-    for i, acc in enumerate(accounts, 1):
-        print(f"  {i:2d}. {acc.issuer:<15} {acc.account:<30}")
+    while True:
+        # 显示账号列表
+        print(f"\n共 {len(accounts)} 个账号：\n")
+        print(f"{'编号':<5} {'服务提供商':<15} {'账号':<30} {'分类':<10}")
+        print("─" * 65)
+        for i, acc in enumerate(accounts, 1):
+            print(f"{i:<5} {acc.issuer:<15} {acc.account:<30} {acc.category:<10}")
+        print("─" * 65)
+        print("  输入编号查看详情 | 输入 0 返回主菜单")
 
-    print("-" * 60)
-
-    try:
-        idx = input("\n输入账号编号 (0 取消): ").strip()
-        if idx == '0':
-            return
-
-        idx = int(idx)
-        if idx < 1 or idx > len(accounts):
-            print("✗ 无效的选择！")
-            return
-    except ValueError:
-        print("✗ 请输入数字！")
-        return
-
-    account = accounts[idx - 1]
-    secret = storage.get_secret(account.id)
-
-    # 动态刷新验证码
-    try:
-        while True:
-            display_account_with_code(account, secret)
-            user_input = input(">>> ").strip()
-
-            if user_input.lower() == 'q':
+        try:
+            idx = input("\n>>> ").strip()
+            if idx == '0':
                 break
 
-            # 复制到剪贴板
-            code = generate_totp(secret, account.algorithm, account.digits, account.period)
-            if copy_to_clipboard(code):
-                print(f"✓ 已复制到剪贴板: {code}")
-            else:
-                print(f"验证码: {code}")
-                print("(自动复制失败，请手动复制)")
+            idx = int(idx)
+            if idx < 1 or idx > len(accounts):
+                print("✗ 无效的选择！")
+                continue
+        except ValueError:
+            print("✗ 请输入数字！")
+            continue
 
-            # 等待一下再刷新
-            time.sleep(0.5)
+        account = accounts[idx - 1]
+        secret = storage.get_secret(account.id)
 
-    except KeyboardInterrupt:
-        print("\n返回主菜单...")
+        # 进入详情页
+        try:
+            while True:
+                display_account_with_code(account, secret)
+                user_input = input(">>> ").strip()
 
+                if user_input.lower() == 'q':
+                    break  # 返回列表
 
-def handle_list_accounts(storage: StorageManager):
-    """处理账号列表"""
-    accounts = storage.get_all_accounts()
+                # 复制到剪贴板
+                code = generate_totp(secret, account.algorithm, account.digits, account.period)
+                if copy_to_clipboard(code):
+                    print(f"✓ 已复制到剪贴板: {code}")
+                else:
+                    print(f"验证码: {code}")
+                    print("(自动复制失败，请手动复制)")
 
-    if not accounts:
-        print("\n暂无账号。")
-        return
+                # 等待后刷新
+                time.sleep(0.5)
 
-    print(f"\n共 {len(accounts)} 个账号：\n")
-    print(f"{'序号':<5} {'服务提供商':<15} {'账号':<30} {'分类':<10}")
-    print("─" * 65)
-
-    for i, acc in enumerate(accounts, 1):
-        print(f"{i:<5} {acc.issuer:<15} {acc.account:<30} {acc.category:<10}")
-
-    print("─" * 65)
+        except KeyboardInterrupt:
+            print("\n返回列表...")
+            continue
 
 
 def handle_edit_account(storage: StorageManager):
@@ -403,30 +387,6 @@ def handle_import(storage: StorageManager):
         print(f"✗ 导入失败: {e}")
 
 
-def handle_refresh_code(storage: StorageManager):
-    """处理刷新验证码"""
-    accounts = storage.get_all_accounts()
-    if not accounts:
-        print("\n暂无账号。")
-        return
-
-    # 显示所有账号的当前验证码
-    print("\n当前所有验证码：\n")
-    print(f"{'序号':<5} {'服务提供商':<15} {'验证码':<10} {'剩余':<8}")
-    print("─" * 45)
-
-    for i, acc in enumerate(accounts, 1):
-        try:
-            secret = storage.get_secret(acc.id)
-            code = generate_totp(secret, acc.algorithm, acc.digits, acc.period)
-            remaining = get_remaining_seconds(acc.period)
-            print(f"{i:<5} {acc.issuer:<15} {code[:3]} {code[3:]:<7} {remaining:2d}s")
-        except Exception:
-            print(f"{i:<5} {acc.issuer:<15} {'ERROR':<10} -")
-
-    print("─" * 45)
-
-
 def main():
     """主程序"""
     display_banner()
@@ -493,7 +453,7 @@ def main():
     while True:
         display_menu()
 
-        choice = input("请选择操作 [0-8]: ").strip()
+        choice = input("请选择操作 [0-6]: ").strip()
 
         if choice == '0':
             print("\n再见！🔒")
@@ -506,22 +466,16 @@ def main():
             handle_view_code(storage)
 
         elif choice == '3':
-            handle_list_accounts(storage)
-
-        elif choice == '4':
             handle_edit_account(storage)
 
-        elif choice == '5':
+        elif choice == '4':
             handle_delete_account(storage)
 
-        elif choice == '6':
+        elif choice == '5':
             handle_export(storage)
 
-        elif choice == '7':
+        elif choice == '6':
             handle_import(storage)
-
-        elif choice == '8':
-            handle_refresh_code(storage)
 
         else:
             print("✗ 无效的选择，请重试！")
