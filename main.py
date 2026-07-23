@@ -484,9 +484,6 @@ def main():
         else:
             print("✗ 无效的选择，请重试！")
 
-        # 按任意键继续
-        input("\n按 Enter 继续...")
-
 
 if __name__ == '__main__':
     main()
