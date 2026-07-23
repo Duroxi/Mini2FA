@@ -433,8 +433,6 @@ def main():
         hint = crypto.get_hint()
 
         print("请输入主密码：")
-        if hint:
-            print(f"💡 密码提示：{hint}")
 
         for attempt in range(3):
             pwd = getpass.getpass(">>> ")
@@ -444,7 +442,7 @@ def main():
             remaining = 2 - attempt
             if remaining > 0:
                 print(f"✗ 密码错误！剩余 {remaining} 次机会")
-                if hint:
+                if hint and attempt == 0:
                     print(f"💡 密码提示：{hint}")
         else:
             print("✗ 密码错误次数过多，程序退出")
