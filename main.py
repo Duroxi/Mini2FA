@@ -284,16 +284,10 @@ def handle_edit_account(storage: StorageManager):
 
     print("\n输入新值（直接回车保持不变）：")
 
-    issuer = input(f"  服务提供商 [{account.issuer}]: ").strip()
-    account_name = input(f"  账号 [{account.account}]: ").strip()
     category = input(f"  分类 [{account.category}]: ").strip()
     notes = input(f"  备注 [{account.notes or ''}]: ").strip()
 
     updates = {}
-    if issuer:
-        updates['issuer'] = issuer
-    if account_name:
-        updates['account'] = account_name
     if category:
         updates['category'] = category
     if notes:
