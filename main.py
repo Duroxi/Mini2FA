@@ -439,13 +439,12 @@ def main():
             if crypto.initialize(pwd):
                 print("✓ 密码验证成功！\n")
                 break
-            remaining = 2 - attempt
-            if remaining > 0:
-                print(f"✗ 密码错误！剩余 {remaining} 次机会")
-                if hint and attempt == 0:
+            if attempt < 2:
+                print("✗ 密码错误")
+                if hint:
                     print(f"💡 密码提示：{hint}")
         else:
-            print("✗ 密码错误次数过多，程序退出")
+            print("✗ 密码错误")
             sys.exit(1)
 
     # 初始化存储管理器
