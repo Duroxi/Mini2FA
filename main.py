@@ -348,7 +348,20 @@ def handle_export(storage: StorageManager):
     """处理导出备份"""
     backup_dir = get_backup_dir()
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_path = backup_dir / f'mini2fa_backup_{timestamp}.json'
+    default_path = backup_dir / f'mini2fa_backup_{timestamp}.json'
+
+    user_path = input(f"\n导出路径（直接回车使用默认）:\n  [{default_path}]: ").strip()
+
+    # 移除路径两端的引号
+    if user_path.startswith('"') and user_path.endswith('"'):
+        user_path = user_path[1:-1]
+    elif user_path.startswith("'") and user_path.endswith("'"):
+        user_path = user_path[1:-1]
+
+    backup_path = Path(user_path) if user_path else default_path
+
+    # 确保父目录存在
+    backup_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         count = storage.export_json(str(backup_path))
