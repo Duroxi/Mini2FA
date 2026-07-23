@@ -379,6 +379,38 @@ def handle_import(storage: StorageManager):
         return
 
     try:
+        # 预览
+        preview = storage.preview_import(input_path)
+
+        if preview['total'] == 0:
+            print("✗ 备份文件中没有账号数据。")
+            return
+
+        print(f"\n📋 备份文件预览：")
+        print("─" * 60)
+
+        if preview['to_import']:
+            print(f"  将导入（{len(preview['to_import'])} 个）：")
+            for acc in preview['to_import']:
+                print(f"    ✓ {acc['issuer']} - {acc['account']}")
+
+        if preview['to_skip']:
+            print(f"  已存在跳过（{len(preview['to_skip'])} 个）：")
+            for acc in preview['to_skip']:
+                print(f"    - {acc['issuer']} - {acc['account']}")
+
+        print("─" * 60)
+        print(f"  共 {preview['total']} 个，将导入 {len(preview['to_import'])} 个")
+
+        if not preview['to_import']:
+            print("  没有新账号需要导入。")
+            return
+
+        confirm = input("\n确认导入？[Y/n]: ").strip().lower()
+        if confirm not in ('', 'y', 'yes'):
+            print("已取消。")
+            return
+
         count = storage.import_json(input_path)
         print(f"✓ 成功导入 {count} 个账号！")
     except Exception as e:

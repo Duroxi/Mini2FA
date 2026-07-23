@@ -240,3 +240,40 @@ class StorageManager:
                 pass  # 跳过已存在的账号
 
         return imported
+
+    def preview_import(self, input_path: str) -> dict:
+        """
+        预览导入内容，不实际导入
+
+        Args:
+            input_path: 输入文件路径
+
+        Returns:
+            {
+                'total': 3,
+                'to_import': [{'issuer': 'Google', 'account': 'user@gmail.com', ...}, ...],
+                'to_skip': [{'issuer': 'GitHub', 'account': 'user@github.com', ...}, ...]
+            }
+        """
+        # 获取现有账号集合
+        existing = self.get_all_accounts()
+        existing_keys = {(acc.issuer, acc.account) for acc in existing}
+
+        with open(input_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        to_import = []
+        to_skip = []
+
+        for acc in data.get('accounts', []):
+            key = (acc['issuer'], acc['account'])
+            if key in existing_keys:
+                to_skip.append(acc)
+            else:
+                to_import.append(acc)
+
+        return {
+            'total': len(data.get('accounts', [])),
+            'to_import': to_import,
+            'to_skip': to_skip
+        }
