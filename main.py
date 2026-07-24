@@ -11,6 +11,7 @@ import platform
 import getpass
 from pathlib import Path
 from datetime import datetime
+from wcwidth import wcswidth
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent))
@@ -79,17 +80,22 @@ def display_account_with_code(account, secret: str):
     # 进度条
     progress = '█' * (30 - remaining) + '░' * remaining
 
+    W = 55  # 边框总宽度
+
+    def pad(line: str) -> str:
+        """用空格填充到指定显示宽度"""
+        return line + ' ' * (W - wcswidth(line) - 1) + '│'
+
     print(f"""
 ┌─────────────────────────────────────────────────────┐
-│  {account.issuer:<25} {account.account:<25} │
+│  {account.issuer:<24} {account.account:<25} │
 │                                                     │
-│  验证码:  {code[:3]} {code[3:]}                                 │
+{pad(f'│  验证码:  {code[:3]} {code[3:]}')}
 │                                                     │
-│  有效期: [{progress}] {remaining:2d}s                    │
+{pad(f'│  有效期: [{progress}] {remaining:2d}s')}
 │                                                     │
-│  按 Enter 复制到剪贴板 | 输入 q 返回列表            │
-└─────────────────────────────────────────────────────┘
-""")
+{pad(f'│  按 Enter 复制到剪贴板 | 输入 q 返回列表')}
+└─────────────────────────────────────────────────────┘""")
 
 
 def display_banner():
@@ -97,7 +103,7 @@ def display_banner():
     print("""
 ╔═══════════════════════════════════════════════════════════╗
 ║                    Mini2FA 脚本版 v1.0                    ║
-║           安全的本地 TOTP 验证码管理工具                   ║
+║          安全的本地 TOTP 验证码管理工具                   ║
 ║                                                           ║
 ║  📱 扫码添加 | 🔑 验证码生成 | 🔐 AES-256 加密            ║
 ╚═══════════════════════════════════════════════════════════╝
@@ -112,8 +118,8 @@ def display_menu():
 ╠═══════════════════════════════════════════════════════════╣
 ║  1. 📱  添加账号（扫码图片）                              ║
 ║  2. 🔑  查看验证码                                        ║
-║  3. ✏️   编辑账号                                          ║
-║  4. 🗑️   删除账号                                          ║
+║  3. ✏️   编辑账号                                         ║
+║  4. 🗑️   删除账号                                         ║
 ║  5. 💾  导出备份                                          ║
 ║  6. 📥  导入备份                                          ║
 ║  0. 🚪  退出                                              ║
