@@ -11,6 +11,7 @@ import platform
 import getpass
 from pathlib import Path
 from datetime import datetime
+import json
 from wcwidth import wcswidth
 
 # 添加项目根目录到 Python 路径
@@ -66,15 +67,16 @@ def copy_to_clipboard(text: str) -> bool:
         return False
 
 
-def display_account_with_code(account, secret: str):
+def display_account_with_code(account, secret: str, code: str = None):
     """
     显示账号信息和验证码
 
     Args:
         account: Account 对象
         secret: 明文密钥
+        code: 可选的验证码（如果已计算，避免重复计算）
     """
-    code = generate_totp(secret, account.algorithm, account.digits, account.period)
+    code = code or generate_totp(secret, account.algorithm, account.digits, account.period)
     remaining = get_remaining_seconds(account.period)
 
     # 进度条
@@ -88,7 +90,7 @@ def display_account_with_code(account, secret: str):
 
     print(f"""
 ┌─────────────────────────────────────────────────────┐
-│  {account.issuer:<24} {account.account:<25} │
+{pad(f'│  {account.issuer} {account.account}')}
 │                                                     │
 {pad(f'│  验证码:  {code[:3]} {code[3:]}')}
 │                                                     │
@@ -175,8 +177,8 @@ def handle_add_account(storage: StorageManager):
         return
 
     # 可选：添加分类和备注
-    category = input("分类 (直接回车使用默认): ").strip() or 'default'
-    notes = input("备注 (直接回车跳过): ").strip()
+    category = input("分类 (直接回车使用默认): ").strip()[:50] or 'default'
+    notes = input("备注 (直接回车跳过): ").strip()[:200]
 
     try:
         account_id = storage.add_account(
@@ -201,13 +203,24 @@ def handle_view_code(storage: StorageManager):
         print("\n暂无账号，请先添加。")
         return
 
+    def trunc(s: str, w: int) -> str:
+        """截断字符串到指定显示宽度，超长用..代替"""
+        if wcswidth(s) <= w:
+            return s
+        while wcswidth(s + '..') > w:
+            s = s[:-1]
+        return s + '..'
+
     while True:
         # 显示账号列表
         print(f"\n共 {len(accounts)} 个账号：\n")
         print(f"{'编号':<5} {'服务提供商':<15} {'账号':<30} {'分类':<10}")
         print("─" * 65)
         for i, acc in enumerate(accounts, 1):
-            print(f"{i:<5} {acc.issuer:<15} {acc.account:<30} {acc.category:<10}")
+            issuer = trunc(acc.issuer, 15)
+            account_n = trunc(acc.account, 30)
+            category = trunc(acc.category, 10)
+            print(f"{i:<5} {issuer:<15} {account_n:<30} {category:<10}")
         print("─" * 65)
         print("  输入编号查看详情 | 输入 0 返回主菜单")
 
@@ -234,14 +247,14 @@ def handle_view_code(storage: StorageManager):
         # 进入详情页
         try:
             while True:
-                display_account_with_code(account, secret)
+                code = generate_totp(secret, account.algorithm, account.digits, account.period)
+                display_account_with_code(account, secret, code)
                 user_input = input(">>> ").strip()
 
                 if user_input.lower() == 'q':
                     break  # 返回列表
 
-                # 复制到剪贴板
-                code = generate_totp(secret, account.algorithm, account.digits, account.period)
+                # 复制到剪贴板（使用已经显示的那个验证码）
                 if copy_to_clipboard(code):
                     print(f"✓ 已复制到剪贴板: {code}")
                 else:
@@ -294,14 +307,19 @@ def handle_edit_account(storage: StorageManager):
     notes = input(f"  备注 [{account.notes or ''}]: ").strip()
 
     updates = {}
-    if category:
+    changes = []
+    if category and category != account.category:
         updates['category'] = category
-    if notes:
+        changes.append(f"分类: {account.category} → {category}")
+    if notes and notes != account.notes:
         updates['notes'] = notes
+        changes.append(f"备注: {account.notes or '(空)'} → {notes}")
 
     if updates:
         if storage.update_account(account.id, **updates):
             print("✓ 更新成功！")
+            for c in changes:
+                print(f"  {c}")
         else:
             print("✗ 更新失败！")
     else:
@@ -348,7 +366,7 @@ def handle_delete_account(storage: StorageManager):
         return
 
     if storage.delete_account(account.id):
-        print("✓ 账号已删除。")
+        print(f"✓ 已删除: {account.issuer} - {account.account}")
     else:
         print("✗ 删除失败！")
 
@@ -368,6 +386,17 @@ def handle_export(storage: StorageManager):
         user_path = user_path[1:-1]
 
     backup_path = Path(user_path) if user_path else default_path
+
+    # 检查是否为目录路径（以斜杠结尾）
+    if user_path and user_path.rstrip().endswith(('\\', '/')):
+        print("✗ 路径末尾包含斜杠（目录分隔符），请输入完整的文件路径。")
+        return
+
+    # 检查文件名是否包含非法字符
+    invalid_chars = set('*?<>|"')
+    if user_path and any(c in os.path.basename(backup_path) for c in invalid_chars):
+        print("✗ 文件名包含非法字符（* ? < > | \"），请重新输入。")
+        return
 
     # 确保父目录存在
     backup_path.parent.mkdir(parents=True, exist_ok=True)
@@ -435,8 +464,14 @@ def handle_import(storage: StorageManager):
 
         count = storage.import_json(input_path)
         print(f"✓ 成功导入 {count} 个账号！")
+    except json.JSONDecodeError:
+        print("✗ 导入失败：备份文件格式错误，不是有效的 JSON 文件。")
     except Exception as e:
-        print(f"✗ 导入失败: {e}")
+        err_msg = str(e)
+        if 'InvalidTag' in err_msg or 'decrypt' in err_msg.lower():
+            print("✗ 导入失败：无法解密备份文件，可能是主密码不匹配或文件已损坏。")
+        else:
+            print(f"✗ 导入失败: {e}")
 
 
 def main():
@@ -469,7 +504,7 @@ def main():
             sys.exit(1)
 
         # 设置密保提示
-        hint = input("设置密码提示（用于忘记密码时提醒，可留空）: ").strip()
+        hint = getpass.getpass("设置密码提示（用于忘记密码时提醒，可留空）: ").strip()
 
         if crypto.initialize(pwd, hint):
             print("✓ 主密码已设置成功！\n")
