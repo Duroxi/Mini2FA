@@ -333,14 +333,17 @@ def handle_delete_account(storage: StorageManager):
         return
 
     account = accounts[idx - 1]
+    confirm_phrase = f"YES, delete {account.issuer} - {account.account}"
 
     print(f"\n确定要删除以下账号吗？")
     print(f"  服务提供商: {account.issuer}")
     print(f"  账号: {account.account}")
     print("\n⚠️  此操作不可恢复！")
+    print(f"请输入以下内容确认删除：")
+    print(f"  {confirm_phrase}")
 
-    confirm = input("\n输入 YES 确认删除: ").strip()
-    if confirm != 'YES':
+    confirm = input("\n>>> ").strip()
+    if confirm != confirm_phrase:
         print("已取消。")
         return
 
