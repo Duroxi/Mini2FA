@@ -203,25 +203,13 @@ def handle_view_code(storage: StorageManager):
         print("\n暂无账号，请先添加。")
         return
 
-    def trunc(s: str, w: int) -> str:
-        """截断字符串到指定显示宽度，超长用..代替"""
-        if wcswidth(s) <= w:
-            return s
-        while wcswidth(s + '..') > w:
-            s = s[:-1]
-        return s + '..'
-
     while True:
         # 显示账号列表
         print(f"\n共 {len(accounts)} 个账号：\n")
-        print(f"{'编号':<5} {'服务提供商':<15} {'账号':<30} {'分类':<10}")
-        print("─" * 65)
         for i, acc in enumerate(accounts, 1):
-            issuer = trunc(acc.issuer, 15)
-            account_n = trunc(acc.account, 30)
-            category = trunc(acc.category, 10)
-            print(f"{i:<5} {issuer:<15} {account_n:<30} {category:<10}")
-        print("─" * 65)
+            print(f"  {i:2d}. {acc.issuer} - {acc.account}")
+        print("─" * 50)
+        print("  输入编号查看详情 | 输入 0 返回主菜单")
         print("  输入编号查看详情 | 输入 0 返回主菜单")
 
         try:
