@@ -9,7 +9,7 @@ from unittest.mock import patch
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.config import (
+from mini2fa.config import (
     DATA_DIR, DB_PATH, KEY_PATH, BACKUP_DIR,
     SALT_SIZE, KEY_SIZE, ITERATIONS, NONCE_SIZE,
     DEFAULT_ALGORITHM, DEFAULT_DIGITS, DEFAULT_PERIOD, DEFAULT_CATEGORY,
@@ -81,8 +81,8 @@ class TestInitDataDir:
 
     def test_init_creates_directory(self, tmp_path):
         """测试初始化创建目录"""
-        with patch('core.config.DATA_DIR', tmp_path / '.mini2fa'):
-            with patch('core.config.BACKUP_DIR', tmp_path / '.mini2fa' / 'backups'):
+        with patch('mini2fa.config.DATA_DIR', tmp_path / '.mini2fa'):
+            with patch('mini2fa.config.BACKUP_DIR', tmp_path / '.mini2fa' / 'backups'):
                 init_data_dir()
 
                 assert (tmp_path / '.mini2fa').exists()
@@ -94,8 +94,8 @@ class TestInitDataDir:
         (tmp_path / '.mini2fa').mkdir()
         (tmp_path / '.mini2fa' / 'backups').mkdir()
 
-        with patch('core.config.DATA_DIR', tmp_path / '.mini2fa'):
-            with patch('core.config.BACKUP_DIR', tmp_path / '.mini2fa' / 'backups'):
+        with patch('mini2fa.config.DATA_DIR', tmp_path / '.mini2fa'):
+            with patch('mini2fa.config.BACKUP_DIR', tmp_path / '.mini2fa' / 'backups'):
                 # 不应该抛出异常
                 init_data_dir()
 

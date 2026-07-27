@@ -14,14 +14,11 @@ from datetime import datetime
 import json
 from wcwidth import wcswidth
 
-# 添加项目根目录到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent))
-
-from core.scanner import scan_qrcode
-from core.crypto import CryptoManager
-from core.storage import StorageManager
-from core.totp import generate_totp, get_remaining_seconds
-from core.config import (
+from .scanner import scan_qrcode
+from .crypto import CryptoManager
+from .storage import StorageManager
+from .totp import generate_totp, get_remaining_seconds
+from .config import (
     init_data_dir, get_data_dir, get_db_path,
     get_key_path, get_backup_dir
 )

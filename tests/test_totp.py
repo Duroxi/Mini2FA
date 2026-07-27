@@ -10,7 +10,7 @@ from unittest.mock import patch
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.totp import generate_totp, get_remaining_seconds, verify_totp
+from mini2fa.totp import generate_totp, get_remaining_seconds, verify_totp
 
 
 class TestGenerateTOTP:
@@ -75,7 +75,7 @@ class TestGenerateTOTP:
         # Base32 解码应该相同
         assert code1 == code2
 
-    @patch('core.totp.time')
+    @patch('mini2fa.totp.time')
     def test_deterministic_output(self, mock_time):
         """测试确定性输出（相同时间相同结果）"""
         secret = 'JBSWY3DPEHPK3PXP'
@@ -88,7 +88,7 @@ class TestGenerateTOTP:
 
         assert code1 == code2
 
-    @patch('core.totp.time')
+    @patch('mini2fa.totp.time')
     def test_time_step_change(self, mock_time):
         """测试时间步长变化"""
         secret = 'JBSWY3DPEHPK3PXP'
@@ -126,7 +126,7 @@ class TestGetRemainingSeconds:
 
         assert 1 <= remaining <= 60
 
-    @patch('core.totp.time')
+    @patch('mini2fa.totp.time')
     def test_specific_time(self, mock_time):
         """测试特定时间点"""
         # 设置时间，使剩余时间可预测

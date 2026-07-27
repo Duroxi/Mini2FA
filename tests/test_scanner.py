@@ -8,7 +8,7 @@ from pathlib import Path
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.scanner import parse_otp_uri, preprocess_image, scan_qrcode
+from mini2fa.scanner import parse_otp_uri, preprocess_image, scan_qrcode
 
 
 class TestParseOTPURI:
@@ -192,7 +192,7 @@ class TestScanQRCode:
 
     def test_scan_nonexistent_file(self):
         """测试扫描不存在的文件"""
-        from core.scanner import scan_qrcode
+        from mini2fa.scanner import scan_qrcode
 
         try:
             scan_qrcode('/nonexistent/path.png')
@@ -202,7 +202,7 @@ class TestScanQRCode:
 
     def test_scan_invalid_image(self):
         """测试扫描无效图片"""
-        from core.scanner import scan_qrcode
+        from mini2fa.scanner import scan_qrcode
         import tempfile
 
         # 创建无效的图片文件
@@ -221,7 +221,7 @@ class TestScanQRCode:
 
     def test_scan_valid_qrcode(self):
         """测试扫描有效的二维码图片"""
-        from core.scanner import scan_qrcode
+        from mini2fa.scanner import scan_qrcode
 
         result = scan_qrcode('test_qr.png')
 
@@ -236,7 +236,7 @@ class TestScanQRCodeFromRawData:
 
     def test_scan_from_raw_data(self):
         """测试从原始字节数据扫描"""
-        from core.scanner import scan_qrcode_from_raw_data
+        from mini2fa.scanner import scan_qrcode_from_raw_data
 
         # 读取测试二维码图片的原始字节
         with open('test_qr.png', 'rb') as f:
@@ -253,7 +253,7 @@ class TestScanQRCodeFromRawData:
 
     def test_scan_from_empty_data(self):
         """测试从空数据扫描"""
-        from core.scanner import scan_qrcode_from_raw_data
+        from mini2fa.scanner import scan_qrcode_from_raw_data
 
         result = scan_qrcode_from_raw_data(b'')
 
@@ -261,7 +261,7 @@ class TestScanQRCodeFromRawData:
 
     def test_scan_from_invalid_data(self):
         """测试从无效数据扫描"""
-        from core.scanner import scan_qrcode_from_raw_data
+        from mini2fa.scanner import scan_qrcode_from_raw_data
 
         result = scan_qrcode_from_raw_data(b'not a qr code')
 
@@ -273,7 +273,7 @@ class TestScanEdgeCases:
 
     def test_scan_non_qr_image(self):
         """测试扫描非二维码图片"""
-        from core.scanner import scan_qrcode
+        from mini2fa.scanner import scan_qrcode
         import tempfile
 
         # 创建一个纯色图片（非二维码）
@@ -291,7 +291,7 @@ class TestScanEdgeCases:
 
     def test_scan_corrupted_image_file(self):
         """测试扫描损坏的图片文件"""
-        from core.scanner import scan_qrcode
+        from mini2fa.scanner import scan_qrcode
         import tempfile
 
         # 创建一个有 .png 后缀但不是图片的文件

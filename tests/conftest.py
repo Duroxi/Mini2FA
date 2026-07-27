@@ -6,13 +6,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-# 添加项目路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# 添加项目 src 路径
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import pytest
 
-from core.crypto import CryptoManager
-from core.storage import StorageManager
+from mini2fa.crypto import CryptoManager
+from mini2fa.storage import StorageManager
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def storage_manager(tmp_dir, crypto_manager):
 @pytest.fixture
 def sample_account_info():
     """示例账号信息"""
-    from core.models import OTPAccountInfo
+    from mini2fa.models import OTPAccountInfo
     return OTPAccountInfo(
         issuer='Google',
         account='user@gmail.com',
