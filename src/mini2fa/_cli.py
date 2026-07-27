@@ -93,7 +93,7 @@ def display_account_with_code(account, secret: str, code: str = None):
 │                                                     │
 {pad(f'│  有效期: [{progress}] {remaining:2d}s')}
 │                                                     │
-{pad(f'│  按 Enter 复制到剪贴板 | 输入 q 返回列表')}
+{pad(f'│  按 Enter 复制到剪贴板')}
 └─────────────────────────────────────────────────────┘""")
 
 
@@ -241,13 +241,13 @@ def handle_view_code(storage: StorageManager):
 
                 # 复制到剪贴板（使用已经显示的那个验证码）
                 if copy_to_clipboard(code):
-                    print(f"✓ 已复制到剪贴板: {code}")
+                    print(f"\n✓ 已复制: {code[:3]} {code[3:]}")
                 else:
-                    print(f"验证码: {code}")
+                    print(f"\n验证码: {code[:3]} {code[3:]}")
                     print("(自动复制失败，请手动复制)")
 
-                # 等待后刷新
-                time.sleep(0.5)
+                time.sleep(2)
+                break  # 返回列表
 
         except KeyboardInterrupt:
             print("\n返回列表...")
