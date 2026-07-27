@@ -151,7 +151,7 @@ class StorageManager:
         if not self.get_account(account_id):
             return False
 
-        allowed_fields = {'issuer', 'account', 'category', 'notes'}
+        allowed_fields = {'category', 'notes'}
         updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
 
         if not updates:
@@ -262,10 +262,19 @@ class StorageManager:
         with open(input_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
+        # 校验版本号
+        version = data.get('version', 0)
+        if version < 1:
+            raise ValueError("不支持的备份文件格式")
+
         to_import = []
         to_skip = []
 
         for acc in data.get('accounts', []):
+            # 校验必要字段
+            if 'issuer' not in acc or 'account' not in acc or 'secret_encrypted' not in acc:
+                raise ValueError("备份文件中存在字段不完整的账号数据")
+
             key = (acc['issuer'], acc['account'])
             if key in existing_keys:
                 to_skip.append(acc)

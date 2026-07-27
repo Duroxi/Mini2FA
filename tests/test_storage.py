@@ -309,34 +309,6 @@ class TestUpdateAccount:
         import shutil
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def test_update_issuer(self):
-        """测试更新服务商"""
-        account_id = self.storage.add_account(
-            issuer='Google',
-            account='user@gmail.com',
-            secret='JBSWY3DPEHPK3PXP'
-        )
-
-        result = self.storage.update_account(account_id, issuer='Google LLC')
-        assert result is True
-
-        account = self.storage.get_account(account_id)
-        assert account.issuer == 'Google LLC'
-
-    def test_update_account_name(self):
-        """测试更新账号名"""
-        account_id = self.storage.add_account(
-            issuer='Google',
-            account='user@gmail.com',
-            secret='JBSWY3DPEHPK3PXP'
-        )
-
-        result = self.storage.update_account(account_id, account='newuser@gmail.com')
-        assert result is True
-
-        account = self.storage.get_account(account_id)
-        assert account.account == 'newuser@gmail.com'
-
     def test_update_category(self):
         """测试更新分类"""
         account_id = self.storage.add_account(
@@ -375,16 +347,14 @@ class TestUpdateAccount:
 
         result = self.storage.update_account(
             account_id,
-            issuer='Google LLC',
-            account='newuser@gmail.com',
-            category='work'
+            category='work',
+            notes='important'
         )
         assert result is True
 
         account = self.storage.get_account(account_id)
-        assert account.issuer == 'Google LLC'
-        assert account.account == 'newuser@gmail.com'
         assert account.category == 'work'
+        assert account.notes == 'important'
 
     def test_update_no_fields(self):
         """测试不更新任何字段"""

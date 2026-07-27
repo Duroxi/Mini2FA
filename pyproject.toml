@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mini2fa"
 version = "0.1.0"
 description = "安全的本地 TOTP 双因素认证管理工具"
-readme = "README.md"
+readme = "doc/README_SCRIPT.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = [

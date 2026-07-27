@@ -23,6 +23,13 @@ from .config import (
     get_key_path, get_backup_dir
 )
 
+W = 55  # 验证码框边框总宽度
+
+
+def pad(line: str) -> str:
+    """用空格填充到指定显示宽度"""
+    return line + ' ' * (W - wcswidth(line) - 1) + '│'
+
 
 def copy_to_clipboard(text: str) -> bool:
     """
@@ -77,13 +84,8 @@ def display_account_with_code(account, secret: str, code: str = None):
     remaining = get_remaining_seconds(account.period)
 
     # 进度条
-    progress = '█' * (30 - remaining) + '░' * remaining
-
-    W = 55  # 边框总宽度
-
-    def pad(line: str) -> str:
-        """用空格填充到指定显示宽度"""
-        return line + ' ' * (W - wcswidth(line) - 1) + '│'
+    period = account.period
+    progress = '█' * (period - remaining) + '░' * remaining
 
     print(f"""
 ┌─────────────────────────────────────────────────────┐
@@ -207,7 +209,6 @@ def handle_view_code(storage: StorageManager):
             print(f"  {i:2d}. {acc.issuer} - {acc.account}")
         print("─" * 50)
         print("  输入编号查看详情 | 输入 0 返回主菜单")
-        print("  输入编号查看详情 | 输入 0 返回主菜单")
 
         try:
             idx = input("\n>>> ").strip()
@@ -230,28 +231,21 @@ def handle_view_code(storage: StorageManager):
             continue
 
         # 进入详情页
-        try:
-            while True:
-                code = generate_totp(secret, account.algorithm, account.digits, account.period)
-                display_account_with_code(account, secret, code)
-                user_input = input(">>> ").strip()
+        code = generate_totp(secret, account.algorithm, account.digits, account.period)
+        display_account_with_code(account, secret, code)
+        user_input = input(">>> ").strip()
 
-                if user_input.lower() == 'q':
-                    break  # 返回列表
+        if user_input.lower() == 'q':
+            continue  # 返回列表
 
-                # 复制到剪贴板（使用已经显示的那个验证码）
-                if copy_to_clipboard(code):
-                    print(f"\n✓ 已复制: {code[:3]} {code[3:]}")
-                else:
-                    print(f"\n验证码: {code[:3]} {code[3:]}")
-                    print("(自动复制失败，请手动复制)")
+        # 复制到剪贴板
+        if copy_to_clipboard(code):
+            print(f"\n✓ 已复制: {code[:3]} {code[3:]}")
+        else:
+            print(f"\n验证码: {code[:3]} {code[3:]}")
+            print("(自动复制失败，请手动复制)")
 
-                time.sleep(2)
-                break  # 返回列表
-
-        except KeyboardInterrupt:
-            print("\n返回列表...")
-            continue
+        time.sleep(2)
 
 
 def handle_edit_account(storage: StorageManager):

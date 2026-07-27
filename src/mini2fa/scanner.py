@@ -3,6 +3,7 @@
 
 从图片文件中识别二维码并解析 OTP URI
 """
+import os
 from typing import Optional
 from urllib.parse import urlparse, parse_qs
 
@@ -104,8 +105,6 @@ def scan_qrcode(image_path: str) -> Optional[OTPAccountInfo]:
     Raises:
         FileNotFoundError: 文件不存在
     """
-    import os
-
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"图片文件不存在: {image_path}")
 
