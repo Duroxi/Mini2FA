@@ -5,7 +5,10 @@ import os
 import sys
 import json
 import tempfile
+import shutil
 from pathlib import Path
+
+import pytest
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -92,6 +95,47 @@ class TestCryptoManagerInit:
 
             assert result is False
             assert crypto2.key is None
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_load_corrupted_key_file(self):
+        """测试加载损坏的密钥文件"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+
+        try:
+            # 写入无效内容
+            with open(temp_path, 'w') as f:
+                f.write('not valid json')
+
+            crypto = CryptoManager(temp_path)
+            result = crypto.initialize('any_password')
+            assert result is False
+            assert crypto.key is None
+
+            # 写入有效JSON但缺少字段
+            with open(temp_path, 'w') as f:
+                json.dump({'version': 1}, f)
+
+            crypto2 = CryptoManager(temp_path)
+            result2 = crypto2.initialize('any_password')
+            assert result2 is False
+            assert crypto2.key is None
+
+            # 写入有效JSON但Base64内容无效
+            with open(temp_path, 'w') as f:
+                json.dump({
+                    'salt': '!!!invalid base64!!!',
+                    'nonce': 'dGVzdA==',
+                    'encrypted_key': 'dGVzdA==',
+                    'version': 1
+                }, f)
+
+            crypto3 = CryptoManager(temp_path)
+            result3 = crypto3.initialize('any_password')
+            assert result3 is False
+            assert crypto3.key is None
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
@@ -400,3 +444,349 @@ class TestKeyFileFormat:
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
+
+
+class TestGetKeyData:
+    """测试读取主密钥文件内容"""
+
+    def test_get_key_data(self):
+        """测试获取主密钥文件内容"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+
+        try:
+            os.unlink(temp_path)
+            crypto = CryptoManager(temp_path)
+            crypto.initialize('password', 'hint')
+
+            data = crypto.get_key_data()
+            assert data is not None
+            assert 'salt' in data
+            assert 'nonce' in data
+            assert 'encrypted_key' in data
+            assert data['hint'] == 'hint'
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_get_key_data_no_file(self):
+        """测试文件不存在时返回 None"""
+        crypto = CryptoManager('/nonexistent/master.key')
+        assert crypto.get_key_data() is None
+
+    def test_get_key_data_corrupted(self):
+        """测试损坏文件返回 None"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write('not json')
+            temp_path = f.name
+
+        try:
+            crypto = CryptoManager(temp_path)
+            assert crypto.get_key_data() is None
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+
+class TestLoadExternalKey:
+    """测试加载外部密钥"""
+
+    def _make_backup_key_data(self, password='backup_pwd'):
+        """创建一份备份 master.key 内容"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+        os.unlink(temp_path)
+        crypto = CryptoManager(temp_path)
+        crypto.initialize(password, 'hint')
+        data = crypto.get_key_data()
+        os.unlink(temp_path)
+        return data
+
+    def test_load_external_key_correct_password(self):
+        """测试正确密码解出外部密钥"""
+        key_data = self._make_backup_key_data('backup_pwd')
+
+        crypto = CryptoManager('/nonexistent/master.key')
+        key = crypto.load_external_key(key_data, 'backup_pwd')
+
+        assert key is not None
+        assert len(key) == 32
+
+    def test_load_external_key_wrong_password(self):
+        """测试错误密码返回 None"""
+        key_data = self._make_backup_key_data('backup_pwd')
+
+        crypto = CryptoManager('/nonexistent/master.key')
+        key = crypto.load_external_key(key_data, 'wrong_pwd')
+
+        assert key is None
+
+    def test_load_external_key_corrupted_data(self):
+        """测试损坏数据抛 ValueError"""
+        crypto = CryptoManager('/nonexistent/master.key')
+        with pytest.raises(ValueError):
+            crypto.load_external_key({'salt': 'bad'}, 'pwd')
+
+    def test_load_external_key_missing_field(self):
+        """测试缺少字段抛 ValueError"""
+        crypto = CryptoManager('/nonexistent/master.key')
+        with pytest.raises(ValueError):
+            crypto.load_external_key({}, 'pwd')
+
+    def test_load_external_key_invalid_base64(self):
+        """测试长度不足的 base64 抛 ValueError"""
+        crypto = CryptoManager('/nonexistent/master.key')
+        # 'dGVzdA==' 解码为 4 字节，不是非法的 base64 但长度无效（load 内部 base64 仍会解码）
+        # 真正的非法 base64 是 length % 4 != 0，如 'abcde'
+        with pytest.raises(ValueError):
+            crypto.load_external_key(
+                {'salt': 'abcde', 'nonce': 'dGVzdA==', 'encrypted_key': 'dGVzdA=='},
+                'pwd'
+            )
+
+
+class TestDecryptWithKey:
+    """测试用指定密钥解密"""
+
+    def test_decrypt_with_correct_key(self):
+        """测试用正确密钥解密"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+        try:
+            os.unlink(temp_path)
+            crypto = CryptoManager(temp_path)
+            crypto.initialize('password')
+
+            encrypted = crypto.encrypt('secret-data')
+            plaintext = crypto.decrypt_with_key(crypto.key, encrypted)
+            assert plaintext == 'secret-data'
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_decrypt_with_wrong_key(self):
+        """测试用错误密钥解密抛出 ValueError"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+        try:
+            os.unlink(temp_path)
+
+            crypto1 = CryptoManager(temp_path)
+            crypto1.initialize('password1')
+            encrypted = crypto1.encrypt('secret')
+
+            crypto2 = CryptoManager(temp_path)
+            crypto2.initialize('password2')
+
+            try:
+                crypto2.decrypt_with_key(crypto2.key, encrypted)
+                assert False, "应该抛出异常"
+            except ValueError as e:
+                assert '密钥不匹配' in str(e)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+
+class TestDecryptInvalidTag:
+    """测试 decrypt 对损坏/密钥不匹配密文抛 ValueError（不抛 InvalidTag）"""
+
+    def test_decrypt_wrong_key_raises_valueerror(self):
+        """测试用错误密钥解密抛 ValueError 而非 InvalidTag"""
+        path1 = os.path.join(tempfile.mkdtemp(), 'key1.json')
+        path2 = os.path.join(tempfile.mkdtemp(), 'key2.json')
+        try:
+            crypto1 = CryptoManager(path1)
+            crypto1.initialize('password1')
+            encrypted = crypto1.encrypt('secret')
+
+            # 用另一个独立密钥解密（合法 base64，但认证失败）
+            crypto2 = CryptoManager(path2)
+            crypto2.initialize('password2')
+
+            with pytest.raises(ValueError):
+                crypto2.decrypt(encrypted)
+        finally:
+            for p in [path1, path2]:
+                if os.path.exists(p):
+                    os.unlink(p)
+
+    def test_decrypt_invalid_base64_raises_valueerror(self):
+        """测试无效 base64 解密抛 ValueError"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+        try:
+            os.unlink(temp_path)
+            crypto = CryptoManager(temp_path)
+            crypto.initialize('password')
+
+            with pytest.raises(ValueError):
+                crypto.decrypt('!!!invalid_base64!!!')
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_decrypt_short_ciphertext_raises_valueerror(self):
+        """测试合法 base64 但密文过短抛 ValueError"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+        try:
+            os.unlink(temp_path)
+            crypto = CryptoManager(temp_path)
+            crypto.initialize('password')
+
+            # 4 字节，不足 nonce(12)+密文(16)
+            with pytest.raises(ValueError):
+                crypto.decrypt('dGVzdA==')
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+
+class TestAdoptExternalKey:
+    """测试替换本机主密钥"""
+
+    def test_adopt_external_key(self):
+        """测试采用外部密钥后本机可用备份密码登录"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+        try:
+            os.unlink(temp_path)
+
+            # 创建备份侧密钥
+            backup_crypto = CryptoManager(temp_path)
+            backup_crypto.initialize('backup_pwd')
+            backup_key_data = backup_crypto.get_key_data()
+
+            # 本机（不同文件）当前用自己的密钥
+            local_path = temp_path + '.local'
+            if os.path.exists(local_path):
+                os.unlink(local_path)
+            local_crypto = CryptoManager(local_path)
+            local_crypto.initialize('local_pwd')
+
+            # 采用备份密钥
+            external_key = backup_crypto.key
+            local_crypto.adopt_external_key(external_key, backup_key_data)
+
+            # 本机 master.key 文件内容应为备份内容
+            with open(local_path, 'r') as f:
+                saved = json.load(f)
+            assert saved == backup_key_data
+
+            # 本机应能用备份密码重新加载
+            reload_crypto = CryptoManager(local_path)
+            assert reload_crypto.initialize('backup_pwd') is True
+            assert reload_crypto.key == external_key
+        finally:
+            for p in [temp_path, temp_path + '.local']:
+                if os.path.exists(p):
+                    os.unlink(p)
+
+
+class TestVerifyPassword:
+    """测试 verify_password（验证不清空会话 key）"""
+
+    def test_verify_correct_password(self):
+        """测试正确密码验证通过"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+
+        try:
+            os.unlink(temp_path)
+            crypto = CryptoManager(temp_path)
+            crypto.initialize('password')
+
+            assert crypto.verify_password('password') is True
+            assert crypto.key is not None
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_verify_wrong_password_preserves_session_key(self):
+        """测试错误密码验证失败但不清空会话 key"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+
+        try:
+            os.unlink(temp_path)
+            crypto = CryptoManager(temp_path)
+            crypto.initialize('password')   # 登录成功, self.key 有效
+
+            assert crypto.verify_password('wrong') is False
+            assert crypto.key is not None, '验证失败不应清空会话 key'
+
+            # 会话内加密仍可用
+            enc = crypto.encrypt('secret')
+            assert crypto.decrypt(enc) == 'secret'
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+
+class TestChangePassword:
+    """测试修改主密码"""
+
+    def test_change_password_success(self):
+        """测试改密成功后旧密码失效、新密码生效"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+
+        try:
+            os.unlink(temp_path)
+            crypto = CryptoManager(temp_path)
+            crypto.initialize('old_pwd', '旧提示')
+
+            assert crypto.change_password('old_pwd', 'New_pwd123', '新提示') is True
+
+            # 旧密码失效
+            old = CryptoManager(temp_path)
+            assert old.initialize('old_pwd') is False
+            # 新密码生效
+            new = CryptoManager(temp_path)
+            assert new.initialize('New_pwd123') is True
+            assert new.get_hint() == '新提示'
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_change_password_wrong_old(self):
+        """测试旧密码错误时拒绝"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            temp_path = f.name
+
+        try:
+            os.unlink(temp_path)
+            crypto = CryptoManager(temp_path)
+            crypto.initialize('old_pwd')
+
+            assert crypto.change_password('wrong_pwd', 'New_pwd123', '') is False
+            # 原密码仍有效
+            reload = CryptoManager(temp_path)
+            assert reload.initialize('old_pwd') is True
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_change_password_keeps_data_decryptable(self):
+        """测试改密后已有数据仍可解密"""
+        from mini2fa.storage import StorageManager
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            key_path = os.path.join(tmpdir, 'key')
+            crypto = CryptoManager(key_path)
+            crypto.initialize('old_pwd')
+            storage = StorageManager(os.path.join(tmpdir, 'db.db'), crypto)
+            acc_id = storage.add_account('Google', 'u@gmail.com', 'JBSWY3DPEHPK3PXP')
+            secret_before = storage.get_secret(acc_id)
+
+            assert crypto.change_password('old_pwd', 'New_pwd123', '') is True
+
+            # 新实例加载后数据仍可解密
+            new = CryptoManager(key_path)
+            assert new.initialize('New_pwd123') is True
+            new_storage = StorageManager(os.path.join(tmpdir, 'db.db'), new)
+            assert new_storage.get_secret(acc_id) == secret_before
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)

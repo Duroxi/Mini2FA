@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -12,6 +13,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mini2fa.storage import StorageManager
 from mini2fa.crypto import CryptoManager
+
+
+class _StorageTestBase:
+    """测试基类 - 提供统一的存储管理器和清理"""
+
+    def setup_method(self):
+        """每个测试前创建临时存储"""
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, 'test.db')
+        self.key_path = os.path.join(self.tmpdir, 'master.key')
+        self.crypto = CryptoManager(self.key_path)
+        self.crypto.initialize('password')
+        self.storage = StorageManager(self.db_path, self.crypto)
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
 
 class TestStorageManagerInit:
@@ -49,24 +67,8 @@ class TestStorageManagerInit:
         assert 'accounts' in tables
 
 
-class TestAddAccount:
+class TestAddAccount(_StorageTestBase):
     """测试添加账号"""
-
-    def setup_method(self):
-        """每个测试前创建临时存储"""
-        self.tmpdir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.tmpdir, 'test.db')
-        self.key_path = os.path.join(self.tmpdir, 'master.key')
-
-        self.crypto = CryptoManager(self.key_path)
-        self.crypto.initialize('password')
-
-        self.storage = StorageManager(self.db_path, self.crypto)
-
-    def teardown_method(self):
-        """每个测试后清理"""
-        import shutil
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_add_basic_account(self):
         """测试添加基本账号"""
@@ -137,24 +139,8 @@ class TestAddAccount:
         assert account.category == 'default'
 
 
-class TestGetAccount:
+class TestGetAccount(_StorageTestBase):
     """测试获取账号"""
-
-    def setup_method(self):
-        """每个测试前创建临时存储"""
-        self.tmpdir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.tmpdir, 'test.db')
-        self.key_path = os.path.join(self.tmpdir, 'master.key')
-
-        self.crypto = CryptoManager(self.key_path)
-        self.crypto.initialize('password')
-
-        self.storage = StorageManager(self.db_path, self.crypto)
-
-    def teardown_method(self):
-        """每个测试后清理"""
-        import shutil
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_get_existing_account(self):
         """测试获取存在的账号"""
@@ -177,24 +163,8 @@ class TestGetAccount:
         assert account is None
 
 
-class TestGetAllAccounts:
+class TestGetAllAccounts(_StorageTestBase):
     """测试获取所有账号"""
-
-    def setup_method(self):
-        """每个测试前创建临时存储"""
-        self.tmpdir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.tmpdir, 'test.db')
-        self.key_path = os.path.join(self.tmpdir, 'master.key')
-
-        self.crypto = CryptoManager(self.key_path)
-        self.crypto.initialize('password')
-
-        self.storage = StorageManager(self.db_path, self.crypto)
-
-    def teardown_method(self):
-        """每个测试后清理"""
-        import shutil
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_get_all_empty(self):
         """测试获取空列表"""
@@ -248,24 +218,8 @@ class TestGetAllAccounts:
         assert len(work_accounts) == 1
 
 
-class TestGetSecret:
+class TestGetSecret(_StorageTestBase):
     """测试获取密钥"""
-
-    def setup_method(self):
-        """每个测试前创建临时存储"""
-        self.tmpdir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.tmpdir, 'test.db')
-        self.key_path = os.path.join(self.tmpdir, 'master.key')
-
-        self.crypto = CryptoManager(self.key_path)
-        self.crypto.initialize('password')
-
-        self.storage = StorageManager(self.db_path, self.crypto)
-
-    def teardown_method(self):
-        """每个测试后清理"""
-        import shutil
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_get_secret(self):
         """测试获取密钥"""
@@ -290,24 +244,8 @@ class TestGetSecret:
             assert '不存在' in str(e)
 
 
-class TestUpdateAccount:
+class TestUpdateAccount(_StorageTestBase):
     """测试更新账号"""
-
-    def setup_method(self):
-        """每个测试前创建临时存储"""
-        self.tmpdir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.tmpdir, 'test.db')
-        self.key_path = os.path.join(self.tmpdir, 'master.key')
-
-        self.crypto = CryptoManager(self.key_path)
-        self.crypto.initialize('password')
-
-        self.storage = StorageManager(self.db_path, self.crypto)
-
-    def teardown_method(self):
-        """每个测试后清理"""
-        import shutil
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_update_category(self):
         """测试更新分类"""
@@ -385,24 +323,8 @@ class TestUpdateAccount:
         assert result is False  # 没有允许的字段被更新
 
 
-class TestDeleteAccount:
+class TestDeleteAccount(_StorageTestBase):
     """测试删除账号"""
-
-    def setup_method(self):
-        """每个测试前创建临时存储"""
-        self.tmpdir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.tmpdir, 'test.db')
-        self.key_path = os.path.join(self.tmpdir, 'master.key')
-
-        self.crypto = CryptoManager(self.key_path)
-        self.crypto.initialize('password')
-
-        self.storage = StorageManager(self.db_path, self.crypto)
-
-    def teardown_method(self):
-        """每个测试后清理"""
-        import shutil
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_delete_existing_account(self):
         """测试删除存在的账号"""
@@ -425,24 +347,8 @@ class TestDeleteAccount:
         assert result is False
 
 
-class TestExportImport:
+class TestExportImport(_StorageTestBase):
     """测试导入导出"""
-
-    def setup_method(self):
-        """每个测试前创建临时存储"""
-        self.tmpdir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.tmpdir, 'test.db')
-        self.key_path = os.path.join(self.tmpdir, 'master.key')
-
-        self.crypto = CryptoManager(self.key_path)
-        self.crypto.initialize('password')
-
-        self.storage = StorageManager(self.db_path, self.crypto)
-
-    def teardown_method(self):
-        """每个测试后清理"""
-        import shutil
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_export_empty(self):
         """测试导出空数据库"""
@@ -498,8 +404,8 @@ class TestExportImport:
                 'accounts': []
             }, f)
 
-        count = self.storage.import_json(export_path)
-        assert count == 0
+        result = self.storage.import_json(export_path)
+        assert result == {'imported': 0, 'updated': 0, 'conflict_skipped': 0, 'damaged_skipped': 0}
 
     def test_export_import_cycle(self):
         """测试导出再导入的完整流程"""
@@ -520,8 +426,8 @@ class TestExportImport:
         new_storage = StorageManager(new_db_path, self.crypto)
 
         # 导入
-        count = new_storage.import_json(export_path)
-        assert count == 1
+        result = new_storage.import_json(export_path)
+        assert result == {'imported': 1, 'updated': 0, 'conflict_skipped': 0, 'damaged_skipped': 0}
 
         # 验证导入的数据
         accounts = new_storage.get_all_accounts()
@@ -543,10 +449,252 @@ class TestExportImport:
         export_path = os.path.join(self.tmpdir, 'export.json')
         self.storage.export_json(export_path)
 
-        # 尝试导入（应该跳过重复）
-        count = self.storage.import_json(export_path)
-        assert count == 0  # 没有新账号被导入
+        # 尝试导入（无决策，默认跳过重复）
+        result = self.storage.import_json(export_path)
+        assert result == {'imported': 0, 'updated': 0, 'conflict_skipped': 1, 'damaged_skipped': 0}
 
         # 验证只有一个账号
         accounts = self.storage.get_all_accounts()
         assert len(accounts) == 1
+
+    def test_export_contains_master_key(self):
+        """测试导出文件包含 master_key 字段"""
+        self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        export_path = os.path.join(self.tmpdir, 'export.json')
+        self.storage.export_json(export_path)
+
+        with open(export_path, 'r') as f:
+            data = json.load(f)
+
+        assert 'master_key' in data
+        assert data['master_key'] is not None
+        assert 'salt' in data['master_key']
+        assert 'encrypted_key' in data['master_key']
+
+
+class TestPreviewImport(_StorageTestBase):
+    """测试导入预览（含损坏条目检测）"""
+
+    def test_preview_classifies_damaged(self):
+        """测试损坏条目归入 damaged"""
+        backup = {
+            'version': 1,
+            'exported_at': 'x',
+            'accounts': [
+                # 损坏条目（密文过短）
+                {'issuer': 'Bad', 'account': 'b@x.com', 'secret_encrypted': 'dGVzdA==',
+                 'algorithm': 'SHA1', 'digits': 6, 'period': 30, 'category': 'default', 'notes': ''},
+                # 正常条目
+                {'issuer': 'Good', 'account': 'g@x.com',
+                 'secret_encrypted': self.crypto.encrypt('JBSWY3DPEHPK3PXP'),
+                 'algorithm': 'SHA1', 'digits': 6, 'period': 30, 'category': 'default', 'notes': ''},
+            ]
+        }
+        path = os.path.join(self.tmpdir, 'backup.json')
+        with open(path, 'w') as f:
+            json.dump(backup, f)
+
+        preview = self.storage.preview_import(path)
+
+        assert preview['total'] == 2
+        assert len(preview['to_import']) == 1
+        assert preview['to_import'][0]['issuer'] == 'Good'
+        assert len(preview['damaged']) == 1
+        assert preview['damaged'][0]['issuer'] == 'Bad'
+        assert len(preview['to_skip']) == 0
+
+    def test_preview_classifies_existing_as_skip(self):
+        """测试已存在账号归入 to_skip"""
+        self.storage.add_account(
+            issuer='Google', account='user@gmail.com', secret='JBSWY3DPEHPK3PXP'
+        )
+        backup = {
+            'version': 1,
+            'exported_at': 'x',
+            'accounts': [
+                {'issuer': 'Google', 'account': 'user@gmail.com',
+                 'secret_encrypted': self.crypto.encrypt('JBSWY3DPEHPK3PXP'),
+                 'algorithm': 'SHA1', 'digits': 6, 'period': 30, 'category': 'default', 'notes': ''},
+            ]
+        }
+        path = os.path.join(self.tmpdir, 'backup.json')
+        with open(path, 'w') as f:
+            json.dump(backup, f)
+
+        preview = self.storage.preview_import(path)
+
+        assert preview['total'] == 1
+        assert len(preview['to_skip']) == 1
+        assert len(preview['to_import']) == 0
+        assert len(preview['damaged']) == 0
+
+
+class TestImportWithExternalKey(_StorageTestBase):
+    """测试跨机导入（用外部密钥重加密）"""
+
+    def test_import_with_external_key(self):
+        """测试用外部密钥导入，数据可用本机密钥解密"""
+        # 本机存储
+        self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+        self.storage.add_account(
+            issuer='GitHub',
+            account='user@github.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+
+        # 导出（含 master_key）
+        export_path = os.path.join(self.tmpdir, 'export.json')
+        self.storage.export_json(export_path)
+
+        # 读取备份中的 master_key，用备份密码解出外部密钥
+        with open(export_path, 'r') as f:
+            data = json.load(f)
+        backup_key_data = data['master_key']
+
+        # 创建本机（新机器）的密钥
+        new_key_path = os.path.join(self.tmpdir, 'new_master.key')
+        new_crypto = CryptoManager(new_key_path)
+        new_crypto.initialize('local_pwd')
+
+        # 用备份密码解出备份主密钥
+        external_key = new_crypto.load_external_key(backup_key_data, 'password')
+
+        # 新存储用本机密钥，导入时传 external_key 重加密
+        new_db_path = os.path.join(self.tmpdir, 'new.db')
+        new_storage = StorageManager(new_db_path, new_crypto)
+        result = new_storage.import_json(export_path, external_key=external_key)
+        assert result == {'imported': 2, 'updated': 0, 'conflict_skipped': 0, 'damaged_skipped': 0}
+
+        # 新存储中的账号应能用本机密钥解密
+        accounts = new_storage.get_all_accounts()
+        assert len(accounts) == 2
+        secret = new_storage.get_secret(accounts[0].id)
+        assert secret == 'JBSWY3DPEHPK3PXP'
+
+    def test_import_with_external_key_wrong_secret(self):
+        """测试外部密钥错误时跳过损坏数据"""
+        # 本机存储
+        self.storage.add_account(
+            issuer='Google',
+            account='user@gmail.com',
+            secret='JBSWY3DPEHPK3PXP'
+        )
+        export_path = os.path.join(self.tmpdir, 'export.json')
+        self.storage.export_json(export_path)
+
+        # 构造一份损坏的备份（secret_encrypted 无效）
+        with open(export_path, 'r') as f:
+            data = json.load(f)
+        data['accounts'][0]['secret_encrypted'] = 'invalid_base64!'
+        corrupt_path = os.path.join(self.tmpdir, 'corrupt.json')
+        with open(corrupt_path, 'w') as f:
+            json.dump(data, f)
+
+        new_key_path = os.path.join(self.tmpdir, 'new_master.key')
+        new_crypto = CryptoManager(new_key_path)
+        new_crypto.initialize('local_pwd')
+        external_key = new_crypto.load_external_key(data['master_key'], 'password')
+
+        new_db_path = os.path.join(self.tmpdir, 'new.db')
+        new_storage = StorageManager(new_db_path, new_crypto)
+        # 损坏条目解密失败 → 被跳过
+        result = new_storage.import_json(corrupt_path, external_key=external_key)
+        assert result == {'imported': 0, 'updated': 0, 'conflict_skipped': 0, 'damaged_skipped': 1}
+
+
+class TestImportConflictDecisions(_StorageTestBase):
+    """测试导入冲突决策（当前/备份）"""
+
+    def _make_backup(self, google_secret='JBSWY3DPEHPK3PXP'):
+        """构造一份备份：含 Google（本机已存在）+ GitHub（本机没有）"""
+        backup = {
+            'version': 1,
+            'exported_at': '2026-01-01T00:00:00',
+            'master_key': self.crypto.get_key_data(),
+            'accounts': [
+                {
+                    'issuer': 'Google',
+                    'account': 'user@gmail.com',
+                    'secret_encrypted': self.crypto.encrypt(google_secret),
+                    'algorithm': 'SHA1', 'digits': 6, 'period': 30,
+                    'category': 'default', 'notes': ''
+                },
+                {
+                    'issuer': 'GitHub',
+                    'account': 'user@github.com',
+                    'secret_encrypted': self.crypto.encrypt('MFRGGZDFMZTWQ2LK'),
+                    'algorithm': 'SHA1', 'digits': 6, 'period': 30,
+                    'category': 'default', 'notes': ''
+                }
+            ]
+        }
+        path = os.path.join(self.tmpdir, 'backup.json')
+        with open(path, 'w') as f:
+            json.dump(backup, f)
+        return path
+
+    def test_conflict_current_keeps_local(self):
+        """决策 current：保留当前账号，不覆盖"""
+        # 本机已有 Google（K1）
+        self.storage.add_account(
+            issuer='Google', account='user@gmail.com', secret='JBSWY3DPEHPK3PXP'
+        )
+        export_path = self._make_backup()
+
+        decisions = {('Google', 'user@gmail.com'): 'current'}
+        result = self.storage.import_json(export_path, decisions=decisions)
+
+        # Google 保留当前（跳过），GitHub 新增
+        assert result == {'imported': 1, 'updated': 0, 'conflict_skipped': 1, 'damaged_skipped': 0}
+
+        google = self.storage.find_by_identity('Google', 'user@gmail.com')
+        assert self.storage.get_secret(google.id) == 'JBSWY3DPEHPK3PXP'
+        github = self.storage.find_by_identity('GitHub', 'user@github.com')
+        assert github is not None
+        assert len(self.storage.get_all_accounts()) == 2
+
+    def test_conflict_backup_overwrites(self):
+        """决策 backup：用备份整体覆盖当前"""
+        self.storage.add_account(
+            issuer='Google', account='user@gmail.com', secret='JBSWY3DPEHPK3PXP'
+        )
+        export_path = self._make_backup()
+
+        decisions = {('Google', 'user@gmail.com'): 'backup'}
+        result = self.storage.import_json(export_path, decisions=decisions)
+
+        # Google 被覆盖，GitHub 新增
+        assert result == {'imported': 1, 'updated': 1, 'conflict_skipped': 0, 'damaged_skipped': 0}
+
+        google = self.storage.find_by_identity('Google', 'user@gmail.com')
+        assert self.storage.get_secret(google.id) == 'JBSWY3DPEHPK3PXP'
+        assert len(self.storage.get_all_accounts()) == 2
+
+    def test_conflict_backup_overwrites_with_new_secret(self):
+        """决策 backup：备份里密钥与当前不同时，用备份密钥覆盖"""
+        self.storage.add_account(
+            issuer='Google', account='user@gmail.com', secret='OLD_SECRET_K1'
+        )
+        # 备份里 Google 用的是新密钥 K2
+        export_path = self._make_backup(google_secret='NEW_SECRET_K2')
+
+        decisions = {('Google', 'user@gmail.com'): 'backup'}
+        result = self.storage.import_json(export_path, decisions=decisions)
+
+        assert result == {'imported': 1, 'updated': 1, 'conflict_skipped': 0, 'damaged_skipped': 0}
+
+        google = self.storage.find_by_identity('Google', 'user@gmail.com')
+        # Google 密钥已被覆盖为 K2
+        assert self.storage.get_secret(google.id) == 'NEW_SECRET_K2'
+        # GitHub 从备份新增
+        github = self.storage.find_by_identity('GitHub', 'user@github.com')
+        assert self.storage.get_secret(github.id) == 'MFRGGZDFMZTWQ2LK'

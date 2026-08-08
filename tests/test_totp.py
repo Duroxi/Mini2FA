@@ -10,6 +10,8 @@ from unittest.mock import patch
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import pytest
+
 from mini2fa.totp import generate_totp, get_remaining_seconds, verify_totp
 
 
@@ -194,20 +196,15 @@ class TestEdgeCases:
     """边界情况测试"""
 
     def test_empty_secret(self):
-        """测试空密钥"""
-        try:
-            generate_totp('')
-            assert False, "应该抛出异常"
-        except Exception:
-            pass
+        """测试空密钥（空字符串是有效的Base32，编码0字节）"""
+        code = generate_totp('')
+        assert len(code) == 6
+        assert code.isdigit()
 
     def test_invalid_base32(self):
         """测试无效的Base32编码"""
-        try:
+        with pytest.raises(Exception):
             generate_totp('1')  # 无效的Base32
-            # 可能不会抛出异常，但结果应该是有效的
-        except Exception:
-            pass
 
     def test_long_secret(self):
         """测试长密钥"""

@@ -4,11 +4,21 @@
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+import pytest
 
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mini2fa.scanner import parse_otp_uri, preprocess_image, scan_qrcode
+from mini2fa.scanner import parse_otp_uri, preprocess_image, scan_qrcode, scan_qrcode_from_raw_data, UnsupportedOTPTypeError
+
+
+class _FakeDecoded:
+    """模拟 pyzbar 解码结果对象"""
+
+    def __init__(self, data: bytes):
+        self.data = data
 
 
 class TestParseOTPURI:
@@ -30,13 +40,13 @@ class TestParseOTPURI:
         assert result.otp_type == 'totp'
 
     def test_parse_hotp_uri(self):
-        """测试解析HOTP URI"""
+        """测试HOTP URI被拒绝（仅支持TOTP）"""
         uri = 'otpauth://hotp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example'
 
-        result = parse_otp_uri(uri)
+        with pytest.raises(UnsupportedOTPTypeError) as excinfo:
+            parse_otp_uri(uri)
 
-        assert result is not None
-        assert result.otp_type == 'hotp'
+        assert excinfo.value.otp_type == 'hotp'
 
     def test_parse_with_issuer_in_params(self):
         """测试从参数中获取issuer"""
@@ -117,6 +127,15 @@ class TestParseOTPURI:
 
         assert result is None
 
+    def test_parse_unknown_type_uri(self):
+        """测试未知OTP类型被拒绝"""
+        uri = 'otpauth://unknown/Example:user@example.com?secret=JBSWY3DPEHPK3PXP'
+
+        with pytest.raises(UnsupportedOTPTypeError) as excinfo:
+            parse_otp_uri(uri)
+
+        assert excinfo.value.otp_type == 'unknown'
+
     def test_parse_with_space_in_account(self):
         """测试账号中包含空格"""
         uri = 'otpauth://totp/Example:user name@example.com?secret=JBSWY3DPEHPK3PXP'
@@ -190,6 +209,8 @@ class TestPreprocessImage:
 class TestScanQRCode:
     """测试二维码扫描"""
 
+    QR_PATH = str(Path(__file__).parent / 'test_qr.png')
+
     def test_scan_nonexistent_file(self):
         """测试扫描不存在的文件"""
         from mini2fa.scanner import scan_qrcode
@@ -212,8 +233,7 @@ class TestScanQRCode:
 
         try:
             result = scan_qrcode(temp_path)
-            # 可能返回None或抛出异常
-            assert result is None or True
+            assert result is None, "无效图片应返回 None"
         except Exception:
             pass
         finally:
@@ -223,7 +243,7 @@ class TestScanQRCode:
         """测试扫描有效的二维码图片"""
         from mini2fa.scanner import scan_qrcode
 
-        result = scan_qrcode('test_qr.png')
+        result = scan_qrcode(self.QR_PATH)
 
         assert result is not None
         assert result.issuer == 'Test'
@@ -234,12 +254,14 @@ class TestScanQRCode:
 class TestScanQRCodeFromRawData:
     """测试从原始数据扫描二维码"""
 
+    QR_PATH = str(Path(__file__).parent / 'test_qr.png')
+
     def test_scan_from_raw_data(self):
         """测试从原始字节数据扫描"""
         from mini2fa.scanner import scan_qrcode_from_raw_data
 
         # 读取测试二维码图片的原始字节
-        with open('test_qr.png', 'rb') as f:
+        with open(self.QR_PATH, 'rb') as f:
             raw_data = f.read()
 
         # 测试裸字节（不带PIL包装）
@@ -266,6 +288,76 @@ class TestScanQRCodeFromRawData:
         result = scan_qrcode_from_raw_data(b'not a qr code')
 
         assert result is None
+
+
+class TestScanUnsupportedOTP:
+    """测试非 TOTP 类型的 OTP 二维码被明确拒绝"""
+
+    HOTP_URI = b'otpauth://hotp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example&counter=1'
+    UNKNOWN_URI = b'otpauth://unknown/Example:user@example.com?secret=JBSWY3DPEHPK3PXP'
+
+    def test_scan_qrcode_hotp_rejected(self):
+        """测试 scan_qrcode 扫描 HOTP 二维码抛出 UnsupportedOTPTypeError"""
+        fake = _FakeDecoded(self.HOTP_URI)
+
+        with patch('mini2fa.scanner.decode', return_value=[fake]):
+            with patch('mini2fa.scanner.Image.open'):
+                with pytest.raises(UnsupportedOTPTypeError) as excinfo:
+                    scan_qrcode(__file__)
+                assert excinfo.value.otp_type == 'hotp'
+
+    def test_scan_qrcode_unknown_type_rejected(self):
+        """测试 scan_qrcode 扫描未知类型 OTP 二维码抛出 UnsupportedOTPTypeError"""
+        fake = _FakeDecoded(self.UNKNOWN_URI)
+
+        with patch('mini2fa.scanner.decode', return_value=[fake]):
+            with patch('mini2fa.scanner.Image.open'):
+                with pytest.raises(UnsupportedOTPTypeError) as excinfo:
+                    scan_qrcode(__file__)
+                assert excinfo.value.otp_type == 'unknown'
+
+    def test_scan_raw_hotp_rejected(self):
+        """测试 scan_qrcode_from_raw_data 扫描 HOTP 数据抛出 UnsupportedOTPTypeError"""
+        fake = _FakeDecoded(self.HOTP_URI)
+
+        with patch('mini2fa.scanner.decode', return_value=[fake]):
+            with pytest.raises(UnsupportedOTPTypeError) as excinfo:
+                scan_qrcode_from_raw_data(b'anything')
+            assert excinfo.value.otp_type == 'hotp'
+
+    def test_scan_raw_unknown_type_rejected(self):
+        """测试 scan_qrcode_from_raw_data 扫描未知类型数据抛出 UnsupportedOTPTypeError"""
+        fake = _FakeDecoded(self.UNKNOWN_URI)
+
+        with patch('mini2fa.scanner.decode', return_value=[fake]):
+            with pytest.raises(UnsupportedOTPTypeError) as excinfo:
+                scan_qrcode_from_raw_data(b'anything')
+            assert excinfo.value.otp_type == 'unknown'
+
+    TOTP_URI = b'otpauth://totp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example'
+
+    def test_multi_qrcode_prefers_totp(self):
+        """测试多二维码时优先返回 totp"""
+        # 解码结果顺序：先 HOTP 后 TOTP
+        fake_hotp = _FakeDecoded(self.HOTP_URI)
+        fake_totp = _FakeDecoded(self.TOTP_URI)
+
+        with patch('mini2fa.scanner.decode', return_value=[fake_hotp, fake_totp]):
+            with patch('mini2fa.scanner.Image.open'):
+                result = scan_qrcode(__file__)
+                assert result is not None
+                assert result.otp_type == 'totp'
+
+    def test_multi_qrcode_all_unsupported(self):
+        """测试多个非 totp 二维码时抛第一个遇到的类型"""
+        fake_steam = _FakeDecoded(b'otpauth://steam/Steam:u@x.com?secret=JBSWY3DPEHPK3PXP')
+        fake_unknown = _FakeDecoded(self.UNKNOWN_URI)
+
+        with patch('mini2fa.scanner.decode', return_value=[fake_steam, fake_unknown]):
+            with patch('mini2fa.scanner.Image.open'):
+                with pytest.raises(UnsupportedOTPTypeError) as excinfo:
+                    scan_qrcode(__file__)
+                assert excinfo.value.otp_type == 'steam'
 
 
 class TestScanEdgeCases:

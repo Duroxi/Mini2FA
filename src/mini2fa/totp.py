@@ -95,18 +95,17 @@ def verify_totp(
         验证是否成功
     """
     current_counter = int(time.time()) // period
+    key = base64.b32decode(secret, casefold=True)
+    hash_func = {
+        'SHA1': hashlib.sha1,
+        'SHA256': hashlib.sha256,
+        'SHA512': hashlib.sha512
+    }[algorithm]
 
     for offset in range(-window, window + 1):
         counter = current_counter + offset
         msg = struct.pack('>Q', counter)
 
-        hash_func = {
-            'SHA1': hashlib.sha1,
-            'SHA256': hashlib.sha256,
-            'SHA512': hashlib.sha512
-        }[algorithm]
-
-        key = base64.b32decode(secret, casefold=True)
         hmac_result = hmac.new(key, msg, hash_func).digest()
 
         offset_byte = hmac_result[-1] & 0x0F

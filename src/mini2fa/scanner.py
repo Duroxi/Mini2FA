@@ -14,6 +14,14 @@ from .models import OTPAccountInfo
 from .config import DEFAULT_ALGORITHM, DEFAULT_DIGITS, DEFAULT_PERIOD
 
 
+class UnsupportedOTPTypeError(Exception):
+    """OTP URI 类型不是 TOTP 时抛出（如 HOTP、STEAM 等）"""
+
+    def __init__(self, otp_type: str):
+        self.otp_type = otp_type
+        super().__init__(f"不支持的 OTP 类型: {otp_type}")
+
+
 def preprocess_image(image: Image.Image) -> Image.Image:
     """
     图片预处理，提高识别率
@@ -54,6 +62,9 @@ def parse_otp_uri(uri: str) -> Optional[OTPAccountInfo]:
     Returns:
         OTPAccountInfo 对象，或 None（格式无效）
 
+    Raises:
+        UnsupportedOTPTypeError: URI 类型不是 totp（如 hotp、steam 等）
+
     URI 格式示例:
         otpauth://totp/Example:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example&algorithm=SHA1&digits=6&period=30
     """
@@ -65,9 +76,14 @@ def parse_otp_uri(uri: str) -> Optional[OTPAccountInfo]:
         parsed = urlparse(uri)
         params = parse_qs(parsed.query)
 
-        # 验证必要参数
+        # 校验必要参数
         if 'secret' not in params:
             return None
+
+        # 校验 OTP 类型（仅支持 totp）
+        otp_type = parsed.netloc
+        if otp_type != 'totp':
+            raise UnsupportedOTPTypeError(otp_type)
 
         # 提取标签（issuer:account 格式）
         label = parsed.path.lstrip('/')
@@ -86,10 +102,33 @@ def parse_otp_uri(uri: str) -> Optional[OTPAccountInfo]:
             algorithm=params.get('algorithm', [DEFAULT_ALGORITHM])[0],
             digits=int(params.get('digits', [DEFAULT_DIGITS])[0]),
             period=int(params.get('period', [DEFAULT_PERIOD])[0]),
-            otp_type=parsed.netloc  # 'totp' 或 'hotp'
+            otp_type=otp_type  # 仅 'totp'
         )
+    except UnsupportedOTPTypeError:
+        raise  # 类型错误穿透，由调用方给出明确提示
     except Exception:
         return None
+
+
+def _extract_otp_info(decoded_objects) -> Optional[OTPAccountInfo]:
+    """从 pyzbar 解码结果中提取第一个可解析的 OTP URI 信息
+
+    若图片含多个二维码：优先返回 totp 类型；存在非 totp 类型时
+    记下第一个遇到的类型，全部非 totp 才抛出。
+    """
+    first_unsupported = None
+    for obj in decoded_objects:
+        data = obj.data.decode('utf-8')
+        if not data.startswith('otpauth://'):
+            continue
+        try:
+            return parse_otp_uri(data)
+        except UnsupportedOTPTypeError as e:
+            if first_unsupported is None:
+                first_unsupported = e.otp_type
+    if first_unsupported is not None:
+        raise UnsupportedOTPTypeError(first_unsupported)
+    return None
 
 
 def scan_qrcode(image_path: str) -> Optional[OTPAccountInfo]:
@@ -104,6 +143,7 @@ def scan_qrcode(image_path: str) -> Optional[OTPAccountInfo]:
 
     Raises:
         FileNotFoundError: 文件不存在
+        UnsupportedOTPTypeError: 二维码是 HOTP 等非 TOTP 类型
     """
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"图片文件不存在: {image_path}")
@@ -119,14 +159,10 @@ def scan_qrcode(image_path: str) -> Optional[OTPAccountInfo]:
             processed = preprocess_image(image)
             decoded_objects = decode(processed)
 
-        # 查找有效的 OTP URI
-        for obj in decoded_objects:
-            data = obj.data.decode('utf-8')
-            if data.startswith('otpauth://'):
-                return parse_otp_uri(data)
+        return _extract_otp_info(decoded_objects)
 
-        return None  # 未找到有效二维码
-
+    except UnsupportedOTPTypeError:
+        raise
     except Exception as e:
         raise ValueError(f"扫描失败: {e}")
 
@@ -140,13 +176,14 @@ def scan_qrcode_from_raw_data(data: bytes) -> Optional[OTPAccountInfo]:
 
     Returns:
         OTPAccountInfo 对象，或 None
+
+    Raises:
+        UnsupportedOTPTypeError: 数据是 HOTP 等非 TOTP 类型
     """
     try:
         decoded_objects = decode(data)
-        for obj in decoded_objects:
-            uri = obj.data.decode('utf-8')
-            if uri.startswith('otpauth://'):
-                return parse_otp_uri(uri)
-        return None
+        return _extract_otp_info(decoded_objects)
+    except UnsupportedOTPTypeError:
+        raise
     except Exception:
         return None

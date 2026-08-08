@@ -3,7 +3,7 @@
 from .totp import generate_totp, verify_totp, get_remaining_seconds
 from .crypto import CryptoManager
 from .storage import StorageManager
-from .scanner import scan_qrcode, parse_otp_uri
+from .scanner import scan_qrcode, scan_qrcode_from_raw_data, parse_otp_uri, preprocess_image, UnsupportedOTPTypeError
 from .models import Account, OTPAccountInfo
 
 __version__ = "0.1.0"
