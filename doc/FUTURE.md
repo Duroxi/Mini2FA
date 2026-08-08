@@ -13,24 +13,21 @@
 ### 实现思路
 
 ```python
-# 用户使用示例
-from mini2fa import TOTP, AccountManager
+# 用户使用示例（当前实际 API）
+from mini2fa import generate_totp, verify_totp
 
 # 生成验证码
-totp = TOTP(secret='JBSWY3DPEHPK3PXP')
-code = totp.generate()
+code = generate_totp('JBSWY3DPEHPK3PXP')
 print(code)  # 123456
 
-# 管理账号
-manager = AccountManager(key_path='~/.mini2fa')
-manager.add(issuer='Google', account='user@gmail.com', secret='...')
-accounts = manager.list_all()
+# 验证码验证（window=1 允许前后一个周期）
+ok = verify_totp(code, 'JBSWY3DPEHPK3PXP')
 ```
 
 ### 技术方案
-- 使用 `pyproject.toml` 配置构建系统
+- 已使用 `pyproject.toml` 配置构建系统（src 布局）
 - 发布到 PyPI 和 GitHub Releases
-- 保持 `core/` 模块不变，封装简洁的公开 API
+- 保持现有模块（totp/crypto/storage/scanner）不变，封装简洁的公开 API
 
 ---
 
@@ -56,7 +53,7 @@ accounts = manager.list_all()
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Web 浏览器   │────▶│  FastAPI     │────▶│  core/       │
+│  Web 浏览器   │────▶│  FastAPI     │────▶│  核心模块     │
 │  (PWA)       │◀────│  (REST API)  │◀────│  (TOTP+加密)  │
 └──────────────┘     └──────────────┘     └──────────────┘
                             │
@@ -121,7 +118,7 @@ tools:
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Claude      │────▶│  MCP Server  │────▶│  core/       │
+│  Claude      │────▶│  MCP Server  │────▶│  核心模块     │
 │  Code        │     │  (mini2fa)   │     │  (TOTP+加密)  │
 │  / Cursor    │◀────│              │◀────│              │
 └──────────────┘     └──────────────┘     └──────────────┘
