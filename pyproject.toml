@@ -6,8 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "mini2fa"
 version = "0.1.0"
 description = "安全的本地 TOTP 双因素认证管理工具"
-readme = "doc/README_SCRIPT.md"
-license = {text = "MIT"}
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "pyzbar>=0.1.9",
@@ -15,6 +16,10 @@ dependencies = [
     "cryptography>=41.0.0",
     "wcwidth>=0.2.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Duroxi/Mini2FA"
+Repository = "https://github.com/Duroxi/Mini2FA"
 
 [project.scripts]
 mini2fa = "mini2fa._cli:main"
