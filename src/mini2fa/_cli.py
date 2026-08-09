@@ -5,6 +5,7 @@ Mini2FA 脚本版 - 主程序
 """
 import os
 import sys
+import functools
 import getpass
 from pathlib import Path
 from datetime import datetime
@@ -40,6 +41,18 @@ def _validate_password_strength(pwd: str) -> tuple:
     if not any(c.isdigit() for c in pwd):
         return False, "密码必须包含至少一个数字！"
     return True, ''
+
+
+def _cancelable(func):
+    """装饰器：操作过程中 Ctrl-C 放弃当前操作，返回主菜单"""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except KeyboardInterrupt:
+            print("\n已取消，返回主菜单。")
+            return
+    return wrapper
 
 
 def display_account_with_code(account, secret: str, code: str = None):
@@ -120,6 +133,7 @@ def display_menu():
     """)
 
 
+@_cancelable
 def handle_add_account(storage: StorageManager):
     """处理添加账号"""
     print("\n📱 添加新账号")
@@ -240,6 +254,7 @@ def list_accounts_grouped(accounts) -> list:
     return ordered
 
 
+@_cancelable
 def handle_view_code(storage: StorageManager):
     """统一查看验证码（列表 + 详情 + 复制 + 搜索）"""
     all_accounts = storage.get_all_accounts()
@@ -302,9 +317,10 @@ def handle_view_code(storage: StorageManager):
         # 进入详情页，等待用户查看后返回列表
         code = generate_totp(secret, account.algorithm, account.digits, account.period)
         display_account_with_code(account, secret, code)
-        input(">>> 按 Enter 返回列表 ")
+        input(">>> ")
 
 
+@_cancelable
 def handle_edit_account(storage: StorageManager):
     """处理编辑账号"""
     accounts = storage.get_all_accounts()
@@ -372,6 +388,7 @@ def handle_edit_account(storage: StorageManager):
         print("未做任何修改。")
 
 
+@_cancelable
 def handle_delete_account(storage: StorageManager):
     """处理删除账号"""
     accounts = storage.get_all_accounts()
@@ -416,6 +433,7 @@ def handle_delete_account(storage: StorageManager):
         print("✗ 删除失败！")
 
 
+@_cancelable
 def handle_export(storage: StorageManager):
     """处理导出备份"""
     backup_dir = get_backup_dir()
@@ -468,6 +486,7 @@ def handle_export(storage: StorageManager):
         print(f"✗ 导出失败: {e}")
 
 
+@_cancelable
 def handle_change_password(crypto: CryptoManager):
     """处理修改主密码（验证旧密码 → 新密码 → 重设提示）"""
     print("\n🔒 修改主密码")
@@ -533,6 +552,7 @@ def _print_import_result(result: dict):
     print("✓ 导入完成：" + "，".join(parts))
 
 
+@_cancelable
 def handle_import(storage: StorageManager):
     """处理导入备份"""
     input_path = input("\n请输入备份文件路径: ").strip()

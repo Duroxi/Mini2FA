@@ -6,4 +6,4 @@ from .storage import StorageManager
 from .scanner import scan_qrcode, scan_qrcode_from_raw_data, parse_otp_uri, preprocess_image, UnsupportedOTPTypeError
 from .models import Account, OTPAccountInfo
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

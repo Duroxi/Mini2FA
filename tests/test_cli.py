@@ -361,3 +361,60 @@ class TestAddAccountFlow:
             assert storage.find_by_identity('Google', 'u@gmail.com') is None
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+class TestCancelableHandlers:
+    """测试 Ctrl-C 中断操作性作（放弃当前操作，返回主菜单）"""
+
+    def test_handle_add_account_ctrl_c_cancels(self):
+        """添加账号过程中 Ctrl-C 被捕获，不冒泡"""
+        from unittest.mock import patch
+        from mini2fa._cli import handle_add_account
+        from mini2fa.crypto import CryptoManager
+        from mini2fa.storage import StorageManager
+        from mini2fa.models import OTPAccountInfo
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            key = os.path.join(tmpdir, 'key')
+            crypto = CryptoManager(key)
+            crypto.initialize('Abc123')
+            storage = StorageManager(os.path.join(tmpdir, 'db.db'), crypto)
+            info = OTPAccountInfo('GitHub', 'g@g.com', 'JBSWY3DPEHPK3PXP', 'SHA1', 6, 30, 'totp')
+
+            def kb(*a, **k):
+                raise KeyboardInterrupt()
+
+            # 输入图片路径时 Ctrl-C
+            with patch('mini2fa._cli.os.path.exists', return_value=True):
+                with patch('mini2fa._cli.scan_qrcode', return_value=info):
+                    with patch('builtins.input', side_effect=kb):
+                        # 不应抛出 KeyboardInterrupt（被 _cancelable 捕获）
+                        handle_add_account(storage)
+            # 未入库
+            assert storage.find_by_identity('GitHub', 'g@g.com') is None
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_handle_view_code_ctrl_c_cancels(self):
+        """查看验证码过程中 Ctrl-C 被捕获，不冒泡"""
+        from unittest.mock import patch
+        from mini2fa._cli import handle_view_code
+        from mini2fa.crypto import CryptoManager
+        from mini2fa.storage import StorageManager
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            key = os.path.join(tmpdir, 'key')
+            crypto = CryptoManager(key)
+            crypto.initialize('Abc123')
+            storage = StorageManager(os.path.join(tmpdir, 'db.db'), crypto)
+            storage.add_account('Google', 'u@gmail.com', 'JBSWY3DPEHPK3PXP')
+
+            def kb(*a, **k):
+                raise KeyboardInterrupt()
+
+            with patch('builtins.input', side_effect=kb):
+                # 不应抛出 KeyboardInterrupt
+                handle_view_code(storage)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
