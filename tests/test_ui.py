@@ -126,6 +126,45 @@ class TestTtyMode:
             ui.configure(no_tui=False)
 
 
+class TestArgparse:
+    """命令行参数解析（argparse）"""
+
+    def test_no_tui_flag(self):
+        """--no-tui 解析后禁用 TUI"""
+        from mini2fa._cli import _build_parser
+        args = _build_parser().parse_args(['--no-tui'])
+        assert args.no_tui is True
+
+    def test_no_args_default(self):
+        """无参数默认不禁用 TUI"""
+        from mini2fa._cli import _build_parser
+        args = _build_parser().parse_args([])
+        assert args.no_tui is False
+
+    def test_version_flag(self, capsys):
+        """--version 显示版本并退出"""
+        from mini2fa._cli import _build_parser
+        import pytest as pt
+        with pt.raises(SystemExit):
+            _build_parser().parse_args(['--version'])
+        out = capsys.readouterr().out
+        assert 'mini2fa' in out
+
+    def test_main_accepts_no_tui(self, monkeypatch, capsys):
+        """main(['--no-tui']) 走降级路径（不崩溃）"""
+        from mini2fa import _cli
+        monkeypatch.setattr(_cli, 'display_banner', lambda: None)
+        monkeypatch.setattr(_cli, 'init_data_dir', lambda: None)
+        monkeypatch.setattr(_cli.os.path, 'exists', lambda p: False)
+        from unittest.mock import patch
+        with patch('mini2fa._cli.ui.password_prompt',
+                   side_effect=KeyboardInterrupt()):
+            with patch.object(sys, 'exit', side_effect=SystemExit):
+                with pytest.raises(SystemExit):
+                    _cli.main(['--no-tui'])
+        assert '再见！🔒' in capsys.readouterr().out
+
+
 class TestEntryCtrlC:
     """三条入口链（console script / python -m / __main__）Ctrl-C 全覆盖"""
 

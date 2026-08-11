@@ -9,6 +9,7 @@ Mini2FA 脚本版 - 主程序
 import os
 import sys
 import functools
+import argparse
 from pathlib import Path
 from datetime import datetime
 import json
@@ -685,18 +686,35 @@ def handle_import(storage: StorageManager):
             ui.print_line(f"✗ 导入失败: {e}")
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    """构建命令行参数解析器（供 main 与未来命令行子命令复用）"""
+    from . import __version__
+    parser = argparse.ArgumentParser(
+        prog='mini2fa',
+        description='安全的本地 TOTP 双因素认证管理工具',
+    )
+    parser.add_argument(
+        '--no-tui', action='store_true',
+        help='禁用终端 UI，使用纯文本输出（脚本/CI 用）',
+    )
+    parser.add_argument(
+        '--version', action='version', version=f'mini2fa {__version__}',
+        help='显示版本号并退出',
+    )
+    return parser
+
+
 def main(argv=None):
     """主程序（所有入口统一调用：console script、python -m、_run）
 
     Args:
         argv: 命令行参数列表（None 时用 sys.argv[1:]）。
-              `--no-tui` 禁用终端 UI，使用纯文本输出（脚本/CI 用）。
+              由 argparse 解析，支持 --no-tui、--version。
 
     Ctrl-C 在任意阶段（含主密码输入）都被捕获，优雅退出。
     """
-    argv = list(sys.argv[1:] if argv is None else argv)
-    no_tui = '--no-tui' in argv
-    ui.configure(no_tui=no_tui)
+    args = _build_parser().parse_args(argv)
+    ui.configure(no_tui=args.no_tui)
     ui.enter()
     try:
         try:
