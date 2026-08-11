@@ -1,26 +1,25 @@
 """
-终端 UI 层（零依赖 ANSI 轻量 TUI）
+终端 UI 层（统一输出/输入接口）
 
-提供两套渲染行为，自动降级：
-- TTY 模式：备用屏幕（alt screen）整屏重绘，退出后终端无残留；
-          详情页支持非阻塞按键轮询 + 每秒刷新
-- 非 TTY 模式（管道/IDE/pytest）：等价于 print + input，行为与旧版一致
+业务层（_cli.py）只调用本模块接口，不直接 print/input：
+  print_line / print_lines / print_box / prompt / password_prompt / clear
 
-所有 ANSI 序列只对 TTY 发出；非 TTY 下所有函数均为安全 no-op 或 print 降级。
+行为一致性（两种模式行为一致，差异只在内部实现）：
+- 真实终端（TTY）: 输出追加到备用屏幕；enter/leave 切换备用屏幕，退出后无残留
+- 非 TTY（管道/CI/--no-tui）: 等价 print/input 自动降级
+- clear 在 TTY 下清屏（页面入口/循环迭代调用），非 TTY no-op
 """
 import os
 import sys
 import atexit
 
-# 终端控制序列
-_ENTER_ALT = '\x1b[?1049h'   # 进入备用屏幕（自动清空备屏）
-_LEAVE_ALT = '\x1b[?1049l'   # 退出备用屏幕，恢复主屏幕
+# ANSI 序列
+_ENTER_ALT = '\x1b[?1049h'   # 进入备用屏幕
+_LEAVE_ALT = '\x1b[?1049l'   # 退出备用屏幕
 _CLEAR_ALL = '\x1b[2J'       # 清屏
-_MOVE_HOME = '\x1b[H'        # 光标移到左上角
+_MOVE_HOME = '\x1b[H'        # 光标归位
 _CURSOR_OFF = '\x1b[?25l'    # 隐藏光标
-_CURSOR_ON = '\x1b[?25l'.replace('l', 'h')  # 显示光标
-_CLEAR_TO_EOL = '\x1b[0K'    # 清除光标右侧到行尾
-_CLEAR_TO_BOTTOM = '\x1b[0J' # 清除光标下方全部
+_CURSOR_ON = '\x1b[?25h'     # 显示光标
 
 # 模块级配置（由 _cli.configure() 设置；默认按 TTY 自动判定）
 _no_tui = False
@@ -63,66 +62,80 @@ def leave():
     sys.stdout.flush()
 
 
-def render(lines, prompt='', start_line=0, end_line=None):
-    """整屏重绘一帧
+# ---------------------------------------------------------------
+# 统一输出接口（追加式，两模式行为一致）
+# ---------------------------------------------------------------
 
-    在 TUI 模式下，将光标移动到 start_line 行首，逐行清除并重画
-    [start_line, end_line) 区域，最后把光标停在 prompt 所在行，等待输入。
+def print_line(text: str = ''):
+    """输出一行（追加到当前输出末尾）"""
+    print(text)
+
+
+def print_lines(lines: list):
+    """输出多行（追加）"""
+    for line in lines:
+        print(line)
+
+
+def print_box(lines: list, width: int = 55):
+    """输出一个边框盒子（追加，不清屏）
 
     Args:
         lines: 内容行列表（不含边框）
-        prompt: 输入提示，渲染在最后一行（TUI 下不可见实际输入内容之外）
-        start_line: 从第几行开始重绘（0 = 光标归位整屏重绘）
-        end_line: 重绘到第几行（None = 清除底部剩余内容）
+        width: 边框内部总显示宽度（按 wcswidth 计算，中文/emoji 宽 2）
     """
-    if not tui_enabled():
-        # 降级：等价于 print 逐行输出
-        for line in lines:
-            print(line)
-        sys.stdout.write(prompt)
+    from wcwidth import wcswidth
+    top = '╔' + '═' * (width - 2) + '╗'
+    bottom = '╚' + '═' * (width - 2) + '╝'
+    print(top)
+    for line in lines:
+        pad_w = width - wcswidth(line) - 2
+        if pad_w < 1:  # 内容超宽时不再硬填，保持内容完整
+            print('║' + line + '║')
+        else:
+            print('║' + line + ' ' * pad_w + '║')
+    print(bottom)
+
+
+def prompt(text: str) -> str:
+    """显示提示并读取输入（提示只显示一次）"""
+    return input(text)
+
+
+def password_prompt(text: str) -> str:
+    """显示提示并读取隐藏输入（提示只显示一次）"""
+    import getpass as _getpass
+    return _getpass.getpass(text)
+
+
+def clear():
+    """清屏（仅 TTY 模式生效；非 TTY no-op）。
+
+    页面入口/交互循环迭代时调用，保证整屏干净；
+    普通流程内的输出全部追加，不清屏。
+    """
+    if tui_enabled():
+        sys.stdout.write(_CLEAR_ALL + _MOVE_HOME)
         sys.stdout.flush()
-        return
-
-    out = []
-    if start_line == 0:
-        out.append(_MOVE_HOME)
-    else:
-        out.append(f'\x1b[{start_line + 1}A')  # 上移 start_line 行
-    out.append(_CURSOR_ON)  # 输入提示时显示光标
-
-    for i, line in enumerate(lines):
-        if end_line is not None and i >= end_line - start_line:
-            break
-        out.append(_CLEAR_TO_EOL + line + '\n')
-    if end_line is None:
-        out.append(_CLEAR_TO_BOTTOM)
-    out.append(_CURSOR_OFF)  # 输入提示完成，隐藏光标避免残留
-    out.append(prompt)
-    sys.stdout.write(''.join(out))
-    sys.stdout.flush()
 
 
-def wait_enter(timeout=1.0):
-    """非阻塞等待 Enter 键（或任意结束键）
+def wait_key(timeout=1.0) -> bool:
+    """非阻塞等待 Enter（仅 TUI 模式轮询用）
 
-    TTY 模式下：轮询 stdin，超时返回 False，收到 Enter 返回 True。
-    非 TTY 模式下：退化为阻塞 input()（供测试 mock 拦截）。
+    TTY 模式：轮询 stdin，超时返回 False，收到 Enter 返回 True。
+    非 TTY：不适用（调用方应使用 prompt 阻塞）；此处等价阻塞 input()。
 
     Returns:
         True = 收到 Enter；False = 超时（仅 TTY 模式）
     """
     if not tui_enabled():
-        input()  # 降级：测试中 mock 拦截
+        input()  # 降级：等价阻塞等 Enter（供测试/非 TUI 调用）
         return True
-    return _wait_key(timeout)
+    return _wait_key_impl(timeout)
 
 
-# ---------------------------------------------------------------
-# 跨平台非阻塞键盘轮询
-# ---------------------------------------------------------------
-
-def _wait_key(timeout):
-    """平台相关的轮询实现：超时返回 False，Enter 返回 True"""
+def _wait_key_impl(timeout):
+    """平台相关的非阻塞轮询实现"""
     if os.name == 'nt':
         return _wait_key_windows(timeout)
     return _wait_key_unix(timeout)
@@ -131,8 +144,9 @@ def _wait_key(timeout):
 def _wait_key_windows(timeout):
     """Windows: msvcrt 非阻塞轮询，Ctrl-C 转 KeyboardInterrupt"""
     import msvcrt
-    deadline = _now() + timeout
-    while _now() < deadline:
+    import time
+    deadline = time.time() + timeout
+    while time.time() < deadline:
         if msvcrt.kbhit():
             key = msvcrt.getwch()
             if key == '\r':
@@ -140,7 +154,7 @@ def _wait_key_windows(timeout):
             if key == '\x03':
                 raise KeyboardInterrupt
         else:
-            _sleep(0.02)
+            time.sleep(0.02)
     return False
 
 
@@ -149,13 +163,14 @@ def _wait_key_unix(timeout):
     import select
     import termios
     import tty
+    import time
 
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)  # raw 模式：按键不换行、不回显
-        deadline = _now() + timeout
-        while _now() < deadline:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
             if select.select([sys.stdin], [], [], 0.02)[0]:
                 ch = sys.stdin.read(1)
                 if ch in ('\r', '\n'):
@@ -165,11 +180,3 @@ def _wait_key_unix(timeout):
         return False
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
-
-
-def _now():
-    return __import__('time').time()
-
-
-def _sleep(seconds):
-    __import__('time').sleep(seconds)

@@ -176,7 +176,7 @@ class TestChangePasswordCLI:
         try:
             # getpass: 旧密码, 新密码, 确认新密码; input: hint(回车)
             inputs = iter(['old_pwd', 'New_pwd123', 'New_pwd123', ''])
-            with patch('mini2fa._cli.getpass.getpass', side_effect=lambda prompt: next(inputs)):
+            with patch('getpass.getpass', side_effect=lambda prompt: next(inputs)):
                 with patch('builtins.input', side_effect=lambda prompt: next(inputs)):
                     handle_change_password(crypto)
 
@@ -196,7 +196,7 @@ class TestChangePasswordCLI:
         try:
             # getpass 3次都是错误旧密码
             inputs = iter(['wrong1', 'wrong2', 'wrong3'])
-            with patch('mini2fa._cli.getpass.getpass', side_effect=lambda prompt: next(inputs)):
+            with patch('getpass.getpass', side_effect=lambda prompt: next(inputs)):
                 handle_change_password(crypto)
 
             from mini2fa.crypto import CryptoManager
