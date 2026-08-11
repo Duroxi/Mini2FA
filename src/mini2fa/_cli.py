@@ -16,6 +16,7 @@ from .scanner import scan_qrcode, UnsupportedOTPTypeError
 from .crypto import CryptoManager
 from .storage import StorageManager, StorageCorruptedError
 from .totp import generate_totp, get_remaining_seconds
+from . import ui
 from .config import (
     init_data_dir, get_data_dir, get_db_path,
     get_key_path, get_backup_dir
@@ -133,29 +134,36 @@ def display_banner():
     _print_box(lines)
 
 
-def display_menu():
-    """显示主菜单"""
-    lines = [
+def _menu_lines() -> list:
+    """主菜单内容行（供 TUI 整屏重绘使用）"""
+    return [
         '                    主 菜 单',
         '———————————————————————————————————',
         '  📱  1. 添加账号（扫码图片）',
         '  🔑  2. 查看验证码',
-        '  ✏️   3. 编辑账号',
-        '  🗑️   4. 删除账号',
+        '  ✏️  3. 编辑账号',
+        '  🗑️  4. 删除账号',
         '  💾  5. 导出备份',
         '  📥  6. 导入备份',
         '  🔒  7. 修改主密码',
         '  🚪  0. 退出',
     ]
-    _print_box(lines)
+
+
+def display_menu():
+    """显示主菜单"""
+    _print_box(_menu_lines())
+
+
+def _input_lines(prompt: str):
+    """在 TUI 下打印输入提示（非 TTY 时与 print 一致）"""
+    ui.render([], prompt)
 
 
 @_cancelable
 def handle_add_account(storage: StorageManager):
     """处理添加账号"""
-    print("\n📱 添加新账号")
-    print("-" * 40)
-
+    _input_lines("\n📱 添加新账号\n" + "-" * 40 + "\n请输入图片文件路径: ")
     image_path = input("请输入图片文件路径: ").strip()
 
     # 移除路径两端的引号（Windows 拖拽文件时会带引号）
@@ -165,63 +173,62 @@ def handle_add_account(storage: StorageManager):
         image_path = image_path[1:-1]
 
     if not os.path.exists(image_path):
-        print("✗ 文件不存在！请检查路径。")
+        _show_message(["✗ 文件不存在！请检查路径。"])
         return
 
-    print("正在扫描二维码...")
+    _show_message(["正在扫描二维码..."])
 
     try:
         result = scan_qrcode(image_path)
     except UnsupportedOTPTypeError as e:
-        print(f"✗ 该二维码是 {e.otp_type.upper()} 协议，本工具仅支持 TOTP。")
+        _show_message([f"✗ 该二维码是 {e.otp_type.upper()} 协议，本工具仅支持 TOTP。"])
         return
     except Exception as e:
-        print(f"✗ 扫描失败: {e}")
+        _show_message([f"✗ 扫描失败: {e}"])
         return
 
     if not result:
-        print("✗ 未识别到有效的二维码！")
-        print("  提示：请确保图片包含清晰的 OTP 二维码。")
+        _show_message(["✗ 未识别到有效的二维码！", "  提示：请确保图片包含清晰的 OTP 二维码。"])
         return
 
     # 查重：已存在则直接提示，不进入填字段流程
     existing = storage.find_by_identity(result.issuer, result.account)
     if existing is not None:
-        print(f"✗ 账号已存在: {result.issuer} - {result.account}")
-        print("  该账号已在库中（分类: {0}, ID: {1}）。".format(
-            existing.category, existing.id))
+        _show_message([f"✗ 账号已存在: {result.issuer} - {result.account}",
+                       "  该账号已在库中（分类: {0}, ID: {1}）。".format(
+                           existing.category, existing.id)])
         return
 
     # 显示识别结果
-    print(f"""
-✓ 识别到账号信息：
-  ─────────────────────────────────────
-  服务提供商: {result.issuer}
-  账号:       {result.account}
-  算法:       {result.algorithm}
-  位数:       {result.digits}
-  周期:       {result.period}秒
-  类型:       {result.otp_type}
-    """)
+    _show_message([
+        "✓ 识别到账号信息：",
+        "  ─────────────────────────────────────",
+        f"  服务提供商: {result.issuer}",
+        f"  账号:       {result.account}",
+        f"  算法:       {result.algorithm}",
+        f"  位数:       {result.digits}",
+        f"  周期:       {result.period}秒",
+        f"  类型:       {result.otp_type}",
+    ])
 
     # 先收集分类和备注
     category = input("分类 (直接回车使用默认): ").strip()[:50] or 'default'
     notes = input(f"备注 (直接回车跳过, 最多 {MAX_NOTES_LENGTH} 字): ").strip()[:MAX_NOTES_LENGTH]
 
     # 展示完整摘要，一次性确认
-    print(f"""
-确认添加以下账号？
-  ─────────────────────────────────────
-  服务提供商: {result.issuer}
-  账号:       {result.account}
-  分类:       {category}
-  备注:       {notes or '(空)'}
-  ─────────────────────────────────────
-    """)
+    _show_message([
+        "确认添加以下账号？",
+        "  ─────────────────────────────────────",
+        f"  服务提供商: {result.issuer}",
+        f"  账号:       {result.account}",
+        f"  分类:       {category}",
+        f"  备注:       {notes or '(空)'}",
+        "  ─────────────────────────────────────",
+    ])
 
     confirm = input("确认添加？[Y/n]: ").strip().lower()
     if confirm not in ('', 'y', 'yes'):
-        print("已取消。")
+        _show_message(["已取消。"])
         return
 
     try:
@@ -235,9 +242,9 @@ def handle_add_account(storage: StorageManager):
             category=category,
             notes=notes
         )
-        print(f"✓ 账号添加成功！(ID: {account_id})")
+        _show_message([f"✓ 账号添加成功！(ID: {account_id})"])
     except ValueError as e:
-        print(f"✗ {e}")
+        _show_message([f"✗ {e}"])
 
 
 def list_accounts_grouped(accounts) -> list:
@@ -271,12 +278,28 @@ def list_accounts_grouped(accounts) -> list:
     return ordered
 
 
+def _detail_page(account, secret):
+    """详情页：每秒刷新验证码与剩余时间，Enter 返回"""
+    while True:
+        code = generate_totp(secret, account.algorithm, account.digits, account.period)
+        remaining = get_remaining_seconds(account.period)
+        display_account_with_code(account, secret, code)
+        if ui.tui_enabled():
+            ui.render([], "  按 Enter 返回列表  ")
+            if ui.wait_enter(timeout=1.0):
+                return
+        else:
+            # 非 TUI（管道/CI/--no-tui）：一次渲染，阻塞等用户 Enter
+            input("  按 Enter 返回列表  ")
+            return
+
+
 @_cancelable
 def handle_view_code(storage: StorageManager):
     """统一查看验证码（列表 + 详情 + 复制 + 搜索）"""
     all_accounts = storage.get_all_accounts()
     if not all_accounts:
-        print("\n暂无账号，请先添加。")
+        _show_message(["\n暂无账号，请先添加。"])
         return
 
     accounts = all_accounts  # 当前显示的列表（全量或搜索结果）
@@ -284,7 +307,7 @@ def handle_view_code(storage: StorageManager):
 
     while True:
         # 显示账号列表（按分类分组），返回按显示顺序排列的列表
-        print(f"\n共 {len(accounts)} 个账号：")
+        ui.render([f"\n共 {len(accounts)} 个账号："])
         accounts = list_accounts_grouped(accounts)
         print("─" * 50)
         if searching:
@@ -307,7 +330,7 @@ def handle_view_code(storage: StorageManager):
         if raw.isdigit():
             idx = int(raw)
             if idx < 1 or idx > len(accounts):
-                print("✗ 无效的选择！")
+                _show_message(["✗ 无效的选择！"])
                 continue
             account = accounts[idx - 1]
         else:
@@ -321,20 +344,18 @@ def handle_view_code(storage: StorageManager):
             ]
             searching = True
             if not accounts:
-                print("✗ 未找到匹配账号，已返回全量列表。")
+                _show_message(["✗ 未找到匹配账号，已返回全量列表。"])
                 accounts = all_accounts
                 searching = False
             continue
         try:
             secret = storage.get_secret(account.id)
         except Exception as e:
-            print(f"✗ 获取密钥失败: {e}")
+            _show_message([f"✗ 获取密钥失败: {e}"])
             continue
 
         # 进入详情页，等待用户查看后返回列表
-        code = generate_totp(secret, account.algorithm, account.digits, account.period)
-        display_account_with_code(account, secret, code)
-        input(">>> ")
+        _detail_page(account, secret)
 
 
 @_cancelable
@@ -342,10 +363,10 @@ def handle_edit_account(storage: StorageManager):
     """处理编辑账号"""
     accounts = storage.get_all_accounts()
     if not accounts:
-        print("\n暂无账号。")
+        _show_message(["\n暂无账号。"])
         return
 
-    print("\n选择要编辑的账号（按分类分组）：")
+    ui.render(["\n选择要编辑的账号（按分类分组）："])
     accounts = list_accounts_grouped(accounts)
 
     try:
@@ -355,21 +376,23 @@ def handle_edit_account(storage: StorageManager):
 
         idx = int(idx)
         if idx < 1 or idx > len(accounts):
-            print("✗ 无效的选择！")
+            _show_message(["✗ 无效的选择！"])
             return
     except ValueError:
-        print("✗ 请输入数字！")
+        _show_message(["✗ 请输入数字！"])
         return
 
     account = accounts[idx - 1]
 
-    print(f"\n当前信息：")
-    print(f"  服务提供商: {account.issuer}")
-    print(f"  账号:       {account.account}")
-    print(f"  分类:       {account.category}")
-    print(f"  备注:       {account.notes or '(空)'}")
+    _show_message([
+        f"\n当前信息：",
+        f"  服务提供商: {account.issuer}",
+        f"  账号:       {account.account}",
+        f"  分类:       {account.category}",
+        f"  备注:       {account.notes or '(空)'}",
+    ])
 
-    print("\n输入新值（直接回车保持不变，输入 . 清空）：")
+    _input_lines("\n输入新值（直接回车保持不变，输入 . 清空）：")
 
     category = input(f"  分类 [{account.category}]: ").strip()
     notes = input(f"  备注 [{account.notes or ''}]: ").strip()
@@ -396,13 +419,11 @@ def handle_edit_account(storage: StorageManager):
 
     if updates:
         if storage.update_account(account.id, **updates):
-            print("✓ 更新成功！")
-            for c in changes:
-                print(f"  {c}")
+            _show_message(["✓ 更新成功！"] + [f"  {c}" for c in changes])
         else:
-            print("✗ 更新失败！")
+            _show_message(["✗ 更新失败！"])
     else:
-        print("未做任何修改。")
+        _show_message(["未做任何修改。"])
 
 
 @_cancelable
@@ -410,10 +431,10 @@ def handle_delete_account(storage: StorageManager):
     """处理删除账号"""
     accounts = storage.get_all_accounts()
     if not accounts:
-        print("\n暂无账号。")
+        _show_message(["\n暂无账号。"])
         return
 
-    print("\n选择要删除的账号（按分类分组）：")
+    ui.render(["\n选择要删除的账号（按分类分组）："])
     accounts = list_accounts_grouped(accounts)
 
     try:
@@ -423,31 +444,33 @@ def handle_delete_account(storage: StorageManager):
 
         idx = int(idx)
         if idx < 1 or idx > len(accounts):
-            print("✗ 无效的选择！")
+            _show_message(["✗ 无效的选择！"])
             return
     except ValueError:
-        print("✗ 请输入数字！")
+        _show_message(["✗ 请输入数字！"])
         return
 
     account = accounts[idx - 1]
     confirm_phrase = f"YES, delete {account.issuer} - {account.account}"
 
-    print(f"\n确定要删除以下账号吗？")
-    print(f"  服务提供商: {account.issuer}")
-    print(f"  账号: {account.account}")
-    print("\n⚠️  此操作不可恢复！")
-    print(f"请输入以下内容确认删除：")
-    print(f"  {confirm_phrase}")
+    _show_message([
+        f"\n确定要删除以下账号吗？",
+        f"  服务提供商: {account.issuer}",
+        f"  账号: {account.account}",
+        "\n⚠️  此操作不可恢复！",
+        "请输入以下内容确认删除：",
+        f"  {confirm_phrase}",
+    ])
 
     confirm = input("\n>>> ").strip()
     if confirm != confirm_phrase:
-        print("已取消。")
+        _show_message(["已取消。"])
         return
 
     if storage.delete_account(account.id):
-        print(f"✓ 已删除: {account.issuer} - {account.account}")
+        _show_message([f"✓ 已删除: {account.issuer} - {account.account}"])
     else:
-        print("✗ 删除失败！")
+        _show_message(["✗ 删除失败！"])
 
 
 @_cancelable
@@ -457,6 +480,7 @@ def handle_export(storage: StorageManager):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     default_path = backup_dir / f'mini2fa_backup_{timestamp}.json'
 
+    _input_lines(f"\n导出路径（直接回车使用默认）:\n  [{default_path}]: ")
     user_path = input(f"\n导出路径（直接回车使用默认）:\n  [{default_path}]: ").strip()
 
     # 移除路径两端的引号
@@ -476,14 +500,14 @@ def handle_export(storage: StorageManager):
     # 检查文件名是否包含非法字符
     invalid_chars = set('*?<>|"')
     if user_path and any(c in os.path.basename(backup_path) for c in invalid_chars):
-        print("✗ 文件名包含非法字符（* ? < > | \"），请重新输入。")
+        _show_message(["✗ 文件名包含非法字符（* ? < > | \"），请重新输入。"])
         return
 
     # 目标文件已存在时确认覆盖
     if backup_path.exists():
         confirm = input(f"\n文件已存在：{backup_path}\n覆盖？[y/N]: ").strip().lower()
         if confirm not in ('y', 'yes'):
-            print("已取消。")
+            _show_message(["已取消。"])
             return
 
     # 确保父目录存在
@@ -491,58 +515,58 @@ def handle_export(storage: StorageManager):
 
     try:
         count = storage.export_json(str(backup_path))
-        print(f"""
-✓ 导出成功！
-
-  备份文件: {backup_path}
-  账号数量: {count}
-
-  注意：备份文件仍需主密码才能解密。
-        """)
+        _show_message([
+            "✓ 导出成功！",
+            "",
+            f"  备份文件: {backup_path}",
+            f"  账号数量: {count}",
+            "",
+            "  注意：备份文件仍需主密码才能解密。",
+        ])
     except Exception as e:
-        print(f"✗ 导出失败: {e}")
+        _show_message([f"✗ 导出失败: {e}"])
 
 
 @_cancelable
 def handle_change_password(crypto: CryptoManager):
     """处理修改主密码（验证旧密码 → 新密码 → 重设提示）"""
-    print("\n🔒 修改主密码")
+    _show_message(["\n🔒 修改主密码"])
 
     # 1. 验证旧密码（最多 3 次，验证失败不污染当前会话）
     for attempt in range(3):
         old_pwd = getpass.getpass("输入当前主密码: ")
         if crypto.verify_password(old_pwd):
             break
-        print("✗ 旧密码错误！")
+        _show_message(["✗ 旧密码错误！"])
         if attempt < 2:
-            print(f"  剩余 {2 - attempt} 次尝试。\n")
+            _show_message([f"  剩余 {2 - attempt} 次尝试。"])
     else:
-        print("✗ 验证失败次数过多，已返回主菜单。")
+        _show_message(["✗ 验证失败次数过多，已返回主菜单。"])
         return
 
-    print("✓ 旧密码验证通过！\n")
+    _show_message(["✓ 旧密码验证通过！"])
 
     # 2. 输入新密码（复用密码强度校验）
     for attempt in range(MAX_PASSWORD_ATTEMPTS):
         new_pwd = getpass.getpass("输入新主密码: ")
         valid, msg = _validate_password_strength(new_pwd)
         if not valid:
-            print(f"✗ {msg}")
+            _show_message([f"✗ {msg}"])
             remaining = MAX_PASSWORD_ATTEMPTS - attempt - 1
             if remaining > 0:
-                print(f"  还需满足要求，剩余 {remaining} 次尝试。\n")
+                _show_message([f"  还需满足要求，剩余 {remaining} 次尝试。"])
             continue
 
         new_confirm = getpass.getpass("确认新主密码: ")
         if new_pwd == new_confirm:
             break
-        print("✗ 两次密码不一致！")
+        _show_message(["✗ 两次密码不一致！"])
         remaining = MAX_PASSWORD_ATTEMPTS - attempt - 1
         if remaining > 0:
-            print(f"  请重新输入，剩余 {remaining} 次尝试。\n")
+            _show_message([f"  请重新输入，剩余 {remaining} 次尝试。"])
     else:
-        print(f"\n✗ 新密码设置失败：已尝试 {MAX_PASSWORD_ATTEMPTS} 次。")
-        print("  请重新运行 mini2fa 重试。")
+        _show_message([f"\n✗ 新密码设置失败：已尝试 {MAX_PASSWORD_ATTEMPTS} 次。"])
+        _show_message(["  请重新运行 mini2fa 重试。"])
         return
 
     # 3. 重设密保提示（回车保留原提示）
@@ -552,9 +576,9 @@ def handle_change_password(crypto: CryptoManager):
 
     # 4. 执行修改
     if crypto.change_password(old_pwd, new_pwd, hint):
-        print("✓ 主密码已修改成功！请记住新密码。")
+        _show_message(["✓ 主密码已修改成功！请记住新密码。"])
     else:
-        print("✗ 修改失败！")
+        _show_message(["✗ 修改失败！"])
 
 
 def _print_import_result(result: dict):
@@ -566,16 +590,17 @@ def _print_import_result(result: dict):
         parts.append(f"保留当前 {result['conflict_skipped']} 个")
     if result['damaged_skipped']:
         parts.append(f"损坏跳过 {result['damaged_skipped']} 个")
-    print("✓ 导入完成：" + "，".join(parts))
+    _show_message(["✓ 导入完成：" + "，".join(parts)])
 
 
 @_cancelable
 def handle_import(storage: StorageManager):
     """处理导入备份"""
+    _input_lines("\n请输入备份文件路径: ")
     input_path = input("\n请输入备份文件路径: ").strip()
 
     if not input_path:
-        print("✗ 路径不能为空！")
+        _show_message(["✗ 路径不能为空！"])
         return
 
     # 移除路径两端的引号
@@ -587,11 +612,11 @@ def handle_import(storage: StorageManager):
     # 检查文件名是否包含非法字符
     invalid_chars = set('*?<>|"')
     if any(c in os.path.basename(input_path) for c in invalid_chars):
-        print("✗ 文件名包含非法字符（* ? < > | \"），请重新输入。")
+        _show_message(["✗ 文件名包含非法字符（* ? < > | \"），请重新输入。"])
         return
 
     if not os.path.exists(input_path):
-        print("✗ 文件不存在！")
+        _show_message(["✗ 文件不存在！"])
         return
 
     try:
@@ -603,61 +628,54 @@ def handle_import(storage: StorageManager):
         # 跨机备份：验证备份密码并解出备份主密钥
         external_key = None
         if embedded_key is not None:
-            print("\n检测到备份来自其他安装（内嵌主密钥）。")
+            _show_message(["\n检测到备份来自其他安装（内嵌主密钥）。"])
             bk_pwd = getpass.getpass("请输入备份对应的主密码: ")
             try:
                 external_key = storage.crypto.load_external_key(embedded_key, bk_pwd)
             except ValueError as e:
-                print(f"✗ {e}")
+                _show_message([f"✗ {e}"])
                 return
             if external_key is None:
-                print("✗ 备份主密码错误！")
+                _show_message(["✗ 备份主密码错误！"])
                 return
-            print("✓ 备份主密码验证通过！")
+            _show_message(["✓ 备份主密码验证通过！"])
 
         # 预览（同机/跨机都用 external_key 做解密校验）
         preview = storage.preview_import(input_path, external_key=external_key)
 
         if preview['total'] == 0:
-            print("✗ 备份文件中没有账号数据。")
+            _show_message(["✗ 备份文件中没有账号数据。"])
             return
 
-        print(f"\n📋 备份文件预览：")
-        print("─" * 60)
-
+        lines = ["\n📋 备份文件预览：", "─" * 60]
         if preview['to_import']:
-            print(f"  将导入（{len(preview['to_import'])} 个）：")
-            for acc in preview['to_import']:
-                print(f"    ✓ {acc['issuer']} - {acc['account']}")
-
+            lines.append(f"  将导入（{len(preview['to_import'])} 个）：")
+            lines += [f"    ✓ {acc['issuer']} - {acc['account']}" for acc in preview['to_import']]
         if preview['to_skip']:
-            print(f"  已存在（{len(preview['to_skip'])} 个）：")
-            for acc in preview['to_skip']:
-                print(f"    - {acc['issuer']} - {acc['account']}")
-
+            lines.append(f"  已存在（{len(preview['to_skip'])} 个）：")
+            lines += [f"    - {acc['issuer']} - {acc['account']}" for acc in preview['to_skip']]
         if preview['damaged']:
-            print(f"  损坏无法导入（{len(preview['damaged'])} 个）：")
-            for acc in preview['damaged']:
-                print(f"    ✗ {acc['issuer']} - {acc['account']}")
-
-        print("─" * 60)
-        print(f"  共 {preview['total']} 个，将导入 {len(preview['to_import'])} 个")
+            lines.append(f"  损坏无法导入（{len(preview['damaged'])} 个）：")
+            lines += [f"    ✗ {acc['issuer']} - {acc['account']}" for acc in preview['damaged']]
+        lines.append("─" * 60)
+        lines.append(f"  共 {preview['total']} 个，将导入 {len(preview['to_import'])} 个")
+        _show_message(lines)
 
         if not preview['to_import']:
-            print("  没有新账号需要导入。")
+            _show_message(["  没有新账号需要导入。"])
             return
 
         confirm = input("\n确认导入？[Y/n]: ").strip().lower()
         if confirm not in ('', 'y', 'yes'):
-            print("已取消。")
+            _show_message(["已取消。"])
             return
 
         # 冲突账号（库里已存在）逐账号询问：用当前的还是备份的
         decisions = {}
         if preview['to_skip']:
-            print(f"\n以下 {len(preview['to_skip'])} 个账号在库中已存在，请选择使用哪个版本：")
+            _show_message([f"\n以下 {len(preview['to_skip'])} 个账号在库中已存在，请选择使用哪个版本："])
             for acc in preview['to_skip']:
-                print(f"  {acc['issuer']} - {acc['account']}")
+                _show_message([f"  {acc['issuer']} - {acc['account']}"])
                 choice = input("    用当前的还是备份的？[当前/备份，默认当前]: ").strip().lower()
                 if choice in ('备份', 'backup', 'b'):
                     decisions[(acc['issuer'], acc['account'])] = 'backup'
@@ -672,7 +690,7 @@ def handle_import(storage: StorageManager):
             storage.crypto.adopt_external_key(external_key, embedded_key)
             result = storage.import_json(input_path, decisions=decisions)
             _print_import_result(result)
-            print("✓ 已采用备份的主密钥，请用备份对应的主密码登录本工具。")
+            _show_message(["✓ 已采用备份的主密钥，请用备份对应的主密码登录本工具。"])
         elif external_key is not None:
             # 情况 B：本机已有账号，用备份密钥解密重加密，本机密码不变
             result = storage.import_json(input_path, external_key=external_key, decisions=decisions)
@@ -682,17 +700,40 @@ def handle_import(storage: StorageManager):
             result = storage.import_json(input_path, decisions=decisions)
             _print_import_result(result)
     except json.JSONDecodeError:
-        print("✗ 导入失败：备份文件格式错误，不是有效的 JSON 文件。")
+        _show_message(["✗ 导入失败：备份文件格式错误，不是有效的 JSON 文件。"])
     except Exception as e:
         err_msg = str(e)
         if 'InvalidTag' in err_msg or 'decrypt' in err_msg.lower():
-            print("✗ 导入失败：无法解密备份文件，可能是主密码不匹配或文件已损坏。")
+            _show_message(["✗ 导入失败：无法解密备份文件，可能是主密码不匹配或文件已损坏。"])
         else:
-            print(f"✗ 导入失败: {e}")
+            _show_message([f"✗ 导入失败: {e}"])
 
 
-def main():
-    """主程序"""
+def main(argv=None):
+    """主程序（所有入口统一调用：console script、python -m、_run）
+
+    Args:
+        argv: 命令行参数列表（None 时用 sys.argv[1:]）。
+              `--no-tui` 禁用终端 UI，使用纯文本输出（脚本/CI 用）。
+
+    Ctrl-C 在任意阶段（含主密码输入）都被捕获，优雅退出。
+    """
+    argv = list(sys.argv[1:] if argv is None else argv)
+    no_tui = '--no-tui' in argv
+    ui.configure(no_tui=no_tui)
+    ui.enter()
+    try:
+        try:
+            _main_inner()
+        except KeyboardInterrupt:
+            print("\n再见！🔒")
+            sys.exit(0)
+    finally:
+        ui.leave()
+
+
+def _main_inner():
+    """程序主体（不含 TUI 生命周期）"""
     display_banner()
 
     # 初始化数据目录
@@ -707,58 +748,60 @@ def main():
 
     # 主密码验证
     if not os.path.exists(key_path):
-        print("首次使用，请设置主密码：")
-        print("⚠️  请牢记此密码，丢失将无法恢复数据！\n")
-        print(f"密码要求：{PASSWORD_REQUIREMENTS}\n")
+        _show_message([
+            "首次使用，请设置主密码：",
+            "⚠️  请牢记此密码，丢失将无法恢复数据！",
+            f"密码要求：{PASSWORD_REQUIREMENTS}",
+        ])
 
         pwd = None
         for attempt in range(MAX_PASSWORD_ATTEMPTS):
             pwd = getpass.getpass("输入主密码: ")
             valid, msg = _validate_password_strength(pwd)
             if not valid:
-                print(f"✗ {msg}")
+                _show_message([f"✗ {msg}"])
                 remaining = MAX_PASSWORD_ATTEMPTS - attempt - 1
                 if remaining > 0:
-                    print(f"  还需满足要求，剩余 {remaining} 次尝试。\n")
+                    _show_message([f"  还需满足要求，剩余 {remaining} 次尝试。"])
                 continue
 
             pwd_confirm = getpass.getpass("确认主密码: ")
             if pwd == pwd_confirm:
                 break
-            print("✗ 两次密码不一致！")
+            _show_message(["✗ 两次密码不一致！"])
             remaining = MAX_PASSWORD_ATTEMPTS - attempt - 1
             if remaining > 0:
-                print(f"  请重新输入，剩余 {remaining} 次尝试。\n")
+                _show_message([f"  请重新输入，剩余 {remaining} 次尝试。"])
         else:
-            print(f"\n✗ 主密码设置失败：已尝试 {MAX_PASSWORD_ATTEMPTS} 次。")
-            print("  请重新运行 mini2fa 重新设置。")
+            _show_message([f"\n✗ 主密码设置失败：已尝试 {MAX_PASSWORD_ATTEMPTS} 次。"])
+            _show_message(["  请重新运行 mini2fa 重新设置。"])
             sys.exit(1)
 
         # 设置密保提示
         hint = getpass.getpass("设置密码提示（用于忘记密码时提醒，可留空）: ").strip()
 
         if crypto.initialize(pwd, hint):
-            print("✓ 主密码已设置成功！\n")
+            _show_message(["✓ 主密码已设置成功！"])
         else:
-            print("✗ 初始化失败！")
+            _show_message(["✗ 初始化失败！"])
             sys.exit(1)
     else:
         # 获取密保提示
         hint = crypto.get_hint()
 
-        print("请输入主密码：")
+        _show_message(["请输入主密码："])
 
         for attempt in range(3):
             pwd = getpass.getpass(">>> ")
             if crypto.initialize(pwd):
-                print("✓ 密码验证成功！\n")
+                _show_message(["✓ 密码验证成功！"])
                 break
             if attempt < 2:
-                print("✗ 密码错误")
+                _show_message(["✗ 密码错误"])
                 if hint:
-                    print(f"💡 密码提示：{hint}")
+                    _show_message([f"💡 密码提示：{hint}"])
         else:
-            print("✗ 密码错误")
+            _show_message(["✗ 密码错误"])
             sys.exit(1)
 
     # 初始化存储管理器
@@ -766,12 +809,12 @@ def main():
 
     # 主循环
     while True:
-        display_menu()
+        ui.render(_menu_lines(), "请选择操作 [0-7]: ")
 
         choice = input("请选择操作 [0-7]: ").strip()
 
         if choice == '0':
-            print("\n再见！🔒")
+            _show_message(["\n再见！🔒"])
             break
 
         elif choice == '1':
@@ -796,7 +839,7 @@ def main():
             handle_change_password(crypto)
 
         else:
-            print("✗ 无效的选择，请重试！")
+            _show_message(["✗ 无效的选择，请重试！"])
 
 
 def _run():
@@ -810,6 +853,11 @@ def _run():
         print(f"\n✗ {e}")
         print("  请检查数据文件是否完整，或从备份恢复。")
         sys.exit(1)
+
+
+def _show_message(lines: list):
+    """显示一条消息（TUI 下清除屏上残留，降级下等价 print）"""
+    ui.render(lines)
 
 
 if __name__ == '__main__':

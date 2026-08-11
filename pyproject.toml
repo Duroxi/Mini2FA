@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mini2fa"
-version = "0.1.1"
+version = "0.2.0"
 description = "安全的本地 TOTP 双因素认证管理工具"
 readme = "README.md"
 license = "GPL-3.0-or-later"
