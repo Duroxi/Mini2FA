@@ -698,9 +698,23 @@ def _build_parser() -> argparse.ArgumentParser:
         help='禁用终端 UI，使用纯文本输出（脚本/CI 用）',
     )
     parser.add_argument(
+        '-p', '--password', metavar='PASSWORD',
+        help='主密码（命令行直接传入，用于子命令无交互）',
+    )
+    parser.add_argument(
         '--version', action='version', version=f'mini2fa {__version__}',
         help='显示版本号并退出',
     )
+
+    # 子命令
+    sub = parser.add_subparsers(dest='command', help='子命令')
+    list_cmd = sub.add_parser('list', help='列出所有账号（ID + issuer + account）')
+    list_cmd.add_argument('--json', action='store_true', help='JSON 格式输出')
+
+    get_cmd = sub.add_parser('get', help='获取验证码')
+    get_cmd.add_argument('id', type=int, help='账号 ID（从 list 获取）')
+    get_cmd.add_argument('--json', action='store_true', help='JSON 格式输出（含issuer/account/remaining）')
+
     return parser
 
 
@@ -709,11 +723,31 @@ def main(argv=None):
 
     Args:
         argv: 命令行参数列表（None 时用 sys.argv[1:]）。
-              由 argparse 解析，支持 --no-tui、--version。
+              由 argparse 解析，支持 --no-tui、-p、子命令 list。
 
     Ctrl-C 在任意阶段（含主密码输入）都被捕获，优雅退出。
     """
     args = _build_parser().parse_args(argv)
+
+    # 子命令模式：直接执行，不进 TUI
+    if args.command == 'list':
+        if not args.password:
+            print("错误: 缺少密码参数，请使用 mini2fa -p <password> list", file=sys.stderr)
+            sys.exit(1)
+        _handle_list(args.password, json_format=args.json)
+        return
+
+    if args.command == 'get':
+        if not args.password:
+            print("错误: 缺少密码参数，请使用 mini2fa -p <password> get <id>", file=sys.stderr)
+            sys.exit(1)
+        _handle_get(args.password, args.id, json_format=args.json)
+        return
+
+    # 交互模式（TUI）
+    if args.password:
+        print("警告: -p 参数仅对子命令有效，已忽略", file=sys.stderr)
+
     ui.configure(no_tui=args.no_tui)
     ui.enter()
     try:
@@ -724,6 +758,117 @@ def main(argv=None):
             sys.exit(0)
     finally:
         ui.leave()
+
+
+def _handle_list(password: str, json_format: bool = False):
+    """子命令 list：列出所有账号（ID + issuer + account）
+
+    零交互：密码通过参数传入，输出纯文本或 JSON。
+    """
+    import sqlite3
+
+    # 初始化数据目录（确保存在）
+    init_data_dir()
+
+    db_path = str(get_db_path())
+    key_path = str(get_key_path())
+
+    # 检查主密钥文件是否存在
+    if not os.path.exists(key_path):
+        print("错误: 首次使用请先运行 mini2fa 设置主密码", file=sys.stderr)
+        sys.exit(1)
+
+    crypto = CryptoManager(key_path)
+
+    # 验证密码（不污染会话）
+    if not crypto.initialize(password):
+        print("密码错误", file=sys.stderr)
+        sys.exit(1)
+
+    storage = StorageManager(db_path, crypto)
+    accounts = storage.get_all_accounts()
+
+    if not accounts:
+        print("暂无账号", file=sys.stderr)
+        sys.exit(0)
+
+    # 按分类分组，输出 ID + issuer + account
+    groups = {}
+    for acc in accounts:
+        groups.setdefault(acc.category, []).append(acc)
+
+    categories = sorted(groups.keys(), key=lambda c: (c != 'default', c))
+
+    if json_format:
+        import json
+        result = []
+        for category in categories:
+            for acc in groups[category]:
+                result.append({
+                    'id': acc.id,
+                    'issuer': acc.issuer,
+                    'account': acc.account,
+                    'category': acc.category,
+                })
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        ordered = []
+        for category in categories:
+            print(f"\n  [{category}]")
+            for acc in groups[category]:
+                print(f"    {acc.id:3d}. {acc.issuer} - {acc.account}")
+
+
+def _handle_get(password: str, account_id: int, json_format: bool = False):
+    """子命令 get：用 ID 获取验证码
+
+    零交互：密码通过参数传入，输出纯数字或 JSON。
+    """
+    import json
+
+    # 初始化数据目录（确保存在）
+    init_data_dir()
+
+    db_path = str(get_db_path())
+    key_path = str(get_key_path())
+
+    # 检查主密钥文件是否存在
+    if not os.path.exists(key_path):
+        print("错误: 首次使用请先运行 mini2fa 设置主密码", file=sys.stderr)
+        sys.exit(1)
+
+    crypto = CryptoManager(key_path)
+
+    # 验证密码
+    if not crypto.initialize(password):
+        print("密码错误", file=sys.stderr)
+        sys.exit(1)
+
+    storage = StorageManager(db_path, crypto)
+    account = storage.get_account(account_id)
+
+    if not account:
+        print(f"账号不存在: {account_id}", file=sys.stderr)
+        sys.exit(1)
+
+    # 解密密钥并生成验证码
+    secret = storage.get_secret(account_id)
+    code = generate_totp(secret, account.algorithm, account.digits, account.period)
+    remaining = get_remaining_seconds(account.period)
+
+    if json_format:
+        result = {
+            'id': account.id,
+            'issuer': account.issuer,
+            'account': account.account,
+            'code': code,
+            'period': account.period,
+            'remaining': remaining,
+        }
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        # 默认简洁一行式：issuer - account: code (remaining)
+        print(f"{account.issuer} - {account.account}: {code} ({remaining}s)")
 
 
 def _main_inner():
