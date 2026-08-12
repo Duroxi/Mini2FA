@@ -698,10 +698,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help='禁用终端 UI，使用纯文本输出（脚本/CI 用）',
     )
     parser.add_argument(
-        '-p', '--password', metavar='PASSWORD',
-        help='主密码（命令行直接传入，用于子命令无交互）',
-    )
-    parser.add_argument(
         '--version', action='version', version=f'mini2fa {__version__}',
         help='显示版本号并退出',
     )
@@ -709,18 +705,18 @@ def _build_parser() -> argparse.ArgumentParser:
     # 子命令
     sub = parser.add_subparsers(dest='command', help='子命令')
 
-    # list 子命令（-p 放在子命令后面）
+    # list 子命令（-p 在子命令后面）
     list_cmd = sub.add_parser('list', help='列出所有账号（ID + issuer + account）')
     list_cmd.add_argument(
-        '-p', '--password', metavar='PASSWORD',
+        '-p', '--password', metavar='PASSWORD', required=True,
         help='主密码',
     )
     list_cmd.add_argument('--json', action='store_true', help='JSON 格式输出')
 
-    # get 子命令（-p 放在子命令后面）
+    # get 子命令（-p 在子命令后面）
     get_cmd = sub.add_parser('get', help='获取验证码')
     get_cmd.add_argument(
-        '-p', '--password', metavar='PASSWORD',
+        '-p', '--password', metavar='PASSWORD', required=True,
         help='主密码',
     )
     get_cmd.add_argument('id', type=int, help='账号 ID（从 list 获取）')
@@ -741,17 +737,12 @@ def main(argv=None):
     args = _build_parser().parse_args(argv)
 
     # 子命令模式：直接执行，不进 TUI
-    if args.command in ('list', 'get'):
-        # 优先使用子命令的 -p，其次全局 -p
-        password = getattr(args, 'password', None)
-        if not password:
-            cmd = args.command
-            print(f"错误: 缺少密码参数，请使用 mini2fa {cmd} -p <password>", file=sys.stderr)
-            sys.exit(1)
-        if args.command == 'list':
-            _handle_list(password, json_format=args.json)
-        elif args.command == 'get':
-            _handle_get(password, args.id, json_format=args.json)
+    if args.command == 'list':
+        _handle_list(args.password, json_format=args.json)
+        return
+
+    if args.command == 'get':
+        _handle_get(args.password, args.id, json_format=args.json)
         return
 
     # 交互模式（TUI）
