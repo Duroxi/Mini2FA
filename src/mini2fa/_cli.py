@@ -156,6 +156,7 @@ def handle_add_account(storage: StorageManager):
 
     if not os.path.exists(image_path):
         ui.print_line("✗ 文件不存在！请检查路径。")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     ui.print_line("正在扫描二维码...")
@@ -164,14 +165,17 @@ def handle_add_account(storage: StorageManager):
         result = scan_qrcode(image_path)
     except UnsupportedOTPTypeError as e:
         ui.print_line(f"✗ 该二维码是 {e.otp_type.upper()} 协议，本工具仅支持 TOTP。")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
     except Exception as e:
         ui.print_line(f"✗ 扫描失败: {e}")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     if not result:
         ui.print_line("✗ 未识别到有效的二维码！")
         ui.print_line("  提示：请确保图片包含清晰的 OTP 二维码。")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     # 查重：已存在则直接提示，不进入填字段流程
@@ -180,6 +184,7 @@ def handle_add_account(storage: StorageManager):
         ui.print_line(f"✗ 账号已存在: {result.issuer} - {result.account}")
         ui.print_line("  该账号已在库中（分类: {0}, ID: {1}）。".format(
             existing.category, existing.id))
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     # 显示识别结果
@@ -353,9 +358,11 @@ def handle_edit_account(storage: StorageManager):
         idx = int(idx)
         if idx < 1 or idx > len(accounts):
             ui.print_line("✗ 无效的选择！")
+            ui.prompt("\n按 Enter 返回主菜单 ")
             return
     except ValueError:
         ui.print_line("✗ 请输入数字！")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     account = accounts[idx - 1]
@@ -421,9 +428,11 @@ def handle_delete_account(storage: StorageManager):
         idx = int(idx)
         if idx < 1 or idx > len(accounts):
             ui.print_line("✗ 无效的选择！")
+            ui.prompt("\n按 Enter 返回主菜单 ")
             return
     except ValueError:
         ui.print_line("✗ 请输入数字！")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     account = accounts[idx - 1]
@@ -474,6 +483,7 @@ def handle_export(storage: StorageManager):
     invalid_chars = set('*?<>|"')
     if user_path and any(c in os.path.basename(backup_path) for c in invalid_chars):
         ui.print_line("✗ 文件名包含非法字符（* ? < > | \"），请重新输入。")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     # 目标文件已存在时确认覆盖
@@ -513,6 +523,7 @@ def handle_change_password(crypto: CryptoManager):
             ui.print_line(f"  剩余 {2 - attempt} 次尝试。")
     else:
         ui.print_line("✗ 验证失败次数过多，已返回主菜单。")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     ui.print_line("✓ 旧密码验证通过！")
@@ -538,6 +549,7 @@ def handle_change_password(crypto: CryptoManager):
     else:
         ui.print_line(f"\n✗ 新密码设置失败：已尝试 {MAX_PASSWORD_ATTEMPTS} 次。")
         ui.print_line("  请重新运行 mini2fa 重试。")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     # 3. 重设密保提示（回车保留原提示）
@@ -571,6 +583,7 @@ def handle_import(storage: StorageManager):
 
     if not input_path:
         ui.print_line("✗ 路径不能为空！")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     # 移除路径两端的引号
@@ -583,10 +596,12 @@ def handle_import(storage: StorageManager):
     invalid_chars = set('*?<>|"')
     if any(c in os.path.basename(input_path) for c in invalid_chars):
         ui.print_line("✗ 文件名包含非法字符（* ? < > | \"），请重新输入。")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     if not os.path.exists(input_path):
         ui.print_line("✗ 文件不存在！")
+        ui.prompt("\n按 Enter 返回主菜单 ")
         return
 
     try:
@@ -604,9 +619,11 @@ def handle_import(storage: StorageManager):
                 external_key = storage.crypto.load_external_key(embedded_key, bk_pwd)
             except ValueError as e:
                 ui.print_line(f"✗ {e}")
+                ui.prompt("\n按 Enter 返回主菜单 ")
                 return
             if external_key is None:
                 ui.print_line("✗ 备份主密码错误！")
+                ui.prompt("\n按 Enter 返回主菜单 ")
                 return
             ui.print_line("✓ 备份主密码验证通过！")
 
@@ -615,6 +632,7 @@ def handle_import(storage: StorageManager):
 
         if preview['total'] == 0:
             ui.print_line("✗ 备份文件中没有账号数据。")
+            ui.prompt("\n按 Enter 返回主菜单 ")
             return
 
         ui.print_line("\n📋 备份文件预览：")
@@ -678,12 +696,14 @@ def handle_import(storage: StorageManager):
             _print_import_result(result)
     except json.JSONDecodeError:
         ui.print_line("✗ 导入失败：备份文件格式错误，不是有效的 JSON 文件。")
+        ui.prompt("\n按 Enter 返回主菜单 ")
     except Exception as e:
         err_msg = str(e)
         if 'InvalidTag' in err_msg or 'decrypt' in err_msg.lower():
             ui.print_line("✗ 导入失败：无法解密备份文件，可能是主密码不匹配或文件已损坏。")
         else:
             ui.print_line(f"✗ 导入失败: {e}")
+        ui.prompt("\n按 Enter 返回主菜单 ")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -746,9 +766,6 @@ def main(argv=None):
         return
 
     # 交互模式（TUI）
-    if args.password:
-        print("警告: -p 参数仅对子命令有效，已忽略", file=sys.stderr)
-
     ui.configure(no_tui=args.no_tui)
     ui.enter()
     try:

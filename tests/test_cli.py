@@ -197,7 +197,8 @@ class TestChangePasswordCLI:
             # getpass 3次都是错误旧密码
             inputs = iter(['wrong1', 'wrong2', 'wrong3'])
             with patch('getpass.getpass', side_effect=lambda prompt: next(inputs)):
-                handle_change_password(crypto)
+                with patch('builtins.input', return_value=''):
+                    handle_change_password(crypto)
 
             from mini2fa.crypto import CryptoManager
             reload = CryptoManager(key)
@@ -318,7 +319,8 @@ class TestAddAccountFlow:
         storage.add_account('Google', 'u@gmail.com', 'JBSWY3DPEHPK3PXP')
         try:
             # 若流程错误进入填字段, next() 会 StopIteration 崩溃
-            inputs = iter(['fake.png'])
+            # 需要两个 input: 图片路径 + 按 Enter 返回主菜单
+            inputs = iter(['fake.png', ''])
             with patch('mini2fa._cli.os.path.exists', return_value=True):
                 with patch('mini2fa._cli.scan_qrcode', return_value=info):
                     with patch('builtins.input', side_effect=lambda prompt: next(inputs)):
