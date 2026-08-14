@@ -10,7 +10,7 @@ pip install mini2fa
 
 ## 使用
 
-### 命令行
+### 交互模式（TUI）
 
 ```bash
 mini2fa
@@ -23,6 +23,22 @@ mini2fa
 ```bash
 mini2fa --no-tui
 ```
+
+### 命令行模式（给 Agent 使用）
+
+```bash
+# 列出所有账号（ID + issuer + account）
+mini2fa list -p <password>
+
+# 获取验证码（简洁一行式，零交互）
+mini2fa get -p <password> <id>
+# 输出示例：GitHub - CharlesHahn: 681025 (12s)
+```
+
+**设计原则**：
+- 命令行版给 agent 使用，**零交互**（无任何提示词，所有参数通过命令行传入）
+- 密码通过 `-p` 参数传入（全局参数，放在子命令后面）
+- 只读接口，不提供管理功能（删除/编辑/改密码留给 TUI 交互版）
 
 ### 作为库
 
@@ -42,8 +58,9 @@ print(code)  # 123456
 - 💾 JSON 导入/导出备份（内嵌主密钥，支持跨机器迁移）
 - 🔒 修改主密码、密保提示
 - 🖥️ 跨平台（Windows/Linux/macOS）
+- 🤖 命令行子命令（`list`/`get`）供 Agent 零交互使用
 
 ## 项目
 
 - GitHub: https://github.com/Duroxi/Mini2FA
-- License: MIT
+- License: GPL-3.0-or-later

@@ -63,6 +63,35 @@ twine upload dist/*      # ~/.pypirc 已配置 token
 ### 数据位置（config.py）
 - `~/.mini2fa/` 下：mini2fa.db、master.key、backups/（导出默认目录，路径不可配置）
 
+## 命令行子命令（0.2.3+）
+
+### 设计原则
+- 命令行版给 agent 使用，**零交互**（无任何提示词，所有参数通过命令行传入）
+- 密码通过 `-p` 参数传入（全局参数，放在子命令后面）
+- 只读接口，不提供管理功能（删除/编辑/改密码留给 TUI 交互版）
+
+### 核心命令
+
+```bash
+# 列出所有账号（ID + issuer + account）
+mini2fa list -p <password>
+
+# 获取验证码（简洁一行式）
+mini2fa get -p <password> <id>
+# 输出示例：GitHub - CharlesHahn: 681025 (12s)
+```
+
+### 使用场景
+- **人类**：TUI 交互版（`mini2fa`）用于管理+使用
+- **Agent**：命令行版（`mini2fa get -p xxx <id>`）只用于获取验证码
+
+### 与其他工具的对比
+| 工具 | 设计哲学 |
+|---|---|
+| `opencode` | CLI 工具，零交互，所有参数通过命令行传入 |
+| `claude` | CLI 工具，零交互，所有参数通过命令行传入 |
+| `mini2fa` | 命令行版：零交互，只读接口（get/list） |
+
 ## 交互约定
 
 - 编辑字段：回车保持不变，输入 `.` 清空（分类清空回 default）
@@ -70,6 +99,7 @@ twine upload dist/*      # ~/.pypirc 已配置 token
 - 备注限 20 字符（MAX_NOTES_LENGTH）；密码强度要求 ≥6 位且含大小写字母+数字
 - 首次设置密码 5 次尝试上限；登录/改密/旧密码验证 3 次上限
 - 界面文案用中文，emoji 前缀（📱🔑✏️ 等）保持一致
+- **错误处理**：所有错误后暂停等待用户确认（按 Enter 或停留1.5秒），防止信息一闪而过
 
 ## 发布流程
 
