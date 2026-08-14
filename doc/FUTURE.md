@@ -29,6 +29,9 @@ ok = verify_totp(code, 'JBSWY3DPEHPK3PXP')
 - 发布到 PyPI 和 GitHub Releases
 - 保持现有模块（totp/crypto/storage/scanner）不变，封装简洁的公开 API
 
+### 状态
+✅ 已完成（0.2.3 已发布到 PyPI）
+
 ---
 
 ## 2. Web 用户交互端
@@ -36,39 +39,8 @@ ok = verify_totp(code, 'JBSWY3DPEHPK3PXP')
 ### 目标
 提供 Web 界面，让用户通过浏览器管理 2FA 账号和查看验证码。
 
-### 收益
-- **跨平台**：只要有浏览器就可以使用，无需安装 Python
-- **移动端支持**：手机浏览器访问，扫码更方便
-- **多设备共享**：部署到服务器后，多台设备同步访问
-
-### 方案对比
-
-| 方案 | 框架 | 复杂度 | 推荐场景 |
-|------|------|--------|---------|
-| Flask | Python | ⭐⭐ | 轻量级，快速开发 |
-| FastAPI | Python | ⭐⭐ | 异步性能好，自动生成 API 文档 |
-| Streamlit | Python | ⭐ | 极简易用，适合原型 |
-
-### 架构设计
-
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Web 浏览器   │────▶│  FastAPI     │────▶│  核心模块     │
-│  (PWA)       │◀────│  (REST API)  │◀────│  (TOTP+加密)  │
-└──────────────┘     └──────────────┘     └──────────────┘
-                            │
-                            ▼
-                     ┌──────────────┐
-                     │  SQLite      │
-                     │  + Key file  │
-                     └──────────────┘
-```
-
-### 功能规划
-- 扫码页：上传图片 → 识别二维码 → 添加账号
-- 验证码页：卡片列表展示所有账号的验证码
-- 管理页：编辑、删除、导入导出
-- 安全：登录密码验证 + HTTPS 加密传输
+### 状态
+❌ 已评估不实现（无实际需求，TUI 交互版已足够）
 
 ---
 
@@ -82,60 +54,38 @@ ok = verify_totp(code, 'JBSWY3DPEHPK3PXP')
 - **自动化**：可集成到 CI/CD 流水线中
 - **无感切换**：Agent 自动识别需要验证码的场景并调用
 
-### 交互方式
+### 已实现功能
 
-#### 方式 A：命令行 + 参数模式
+#### 命令行子命令（0.2.3+）
 
 ```bash
-# 命令行参数模式
-mini2fa --list
-mini2fa --code Google
-mini2fa --add screenshot.png
-mini2fa --export backup.json
+# 列出所有账号（ID + issuer + account）
+mini2fa list -p <password>
+
+# 获取验证码（简洁一行式，零交互）
+mini2fa get -p <password> <id>
+# 输出示例：GitHub - CharlesHahn: 681025 (12s)
 ```
 
-#### 方式 B：AI Agent 技能（Skill）模式
+**设计原则**：
+- 命令行版给 agent 使用，**零交互**（无任何提示词，所有参数通过命令行传入）
+- 密码通过 `-p` 参数传入（全局参数，放在子命令后面）
+- 只读接口，不提供管理功能（删除/编辑/改密码留给 TUI 交互版）
 
-```yaml
-# mini2fa-agent-skill.md
-name: mini2fa
-description: 管理 TOTP 双因素认证码
+### 已实现功能
 
-tools:
-  - name: list_accounts
-    description: 列出所有已添加的2FA账号
-  - name: get_code
-    description: 获取指定账号的当前验证码
-    args:
-      - issuer: 服务提供商名称
-  - name: add_account
-    description: 从图片添加2FA账号
-    args:
-      - image_path: 二维码图片路径
-```
+#### Agent Skill 文件
 
-#### 方式 C：MCP Server 模式
+创建 `skill/SKILL.md` 文件，详细介绍如何让 agent 使用 mini2fa。
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Claude      │────▶│  MCP Server  │────▶│  核心模块     │
-│  Code        │     │  (mini2fa)   │     │  (TOTP+加密)  │
-│  / Cursor    │◀────│              │◀────│              │
-└──────────────┘     └──────────────┘     └──────────────┘
-```
+**内容**：
+- 安装方式：`pip install mini2fa`
+- 命令行用法：`mini2fa list/get -p xxx`
+- 使用场景：agent 获取验证码、自动化测试
+- 示例代码：Python 调用示例
 
-通过 MCP 协议暴露工具，让 AI Agent 直接调用：
-- `list_accounts` → 返回账号列表
-- `get_code(issuer)` → 返回验证码
-- `add_account(image_path)` → 添加账号
-
-### 实现优先级
-
-| 方式 | 优先度 | 开发量 | 说明 |
-|------|--------|--------|------|
-| 命令行参数 | ⭐⭐⭐ | 小 | 快速实现，立即可用 |
-| Agent 技能 | ⭐⭐⭐ | 中 | 需要定义技能描述文件 |
-| MCP Server | ⭐⭐ | 中 | 需要实现 MCP 协议接口 |
+### 状态
+✅ 已完成（命令行子命令已完成，skill 文件已创建）
 
 ---
 
@@ -149,11 +99,11 @@ Phase 1: PyPI 发布
   │   └── 封装核心API、发布到 PyPI
   ▼
 Phase 2: 命令行参数
-  │   └── 支持 --flag 模式，非交互式使用
+  │   └── 支持 list/get 子命令，零交互
   ▼
-Phase 3: Web 界面
-  │   └── Flask/FastAPI 提供浏览器访问
+Phase 3: Agent Skill 文件
+  │   └── 创建 skill/SKILL.md，指导 agent 使用
   ▼
-Phase 4: AI Agent 集成
-      └── MCP Server / Skill 文件
+Phase 4: 未来扩展
+      └── 根据需求添加新功能
 ```
