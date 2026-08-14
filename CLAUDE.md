@@ -55,7 +55,7 @@ twine upload dist/*      # ~/.pypirc 已配置 token
 - TTY 模式：`enter()/leave()` 切备用屏幕（`\x1b[?1049h/l`，退出后终端无残留，atexit 兜底恢复）；`render(lines, prompt)` 整屏重绘
 - `wait_enter(timeout)` 非阻塞按键轮询：Windows 用 msvcrt、Unix 用 termios+select（Ctrl-C 转 KeyboardInterrupt）；非 TTY 退化为阻塞 `input()`（测试 mock 仍拦截）
 - 详情页 `_detail_page` 是唯一轮询页面：TUI 下每秒重绘验证码/进度条，Enter 返回；**非 TUI 下单次渲染 + 阻塞 `input()` 等 Enter（绝不闪退，防"一帧即返回"）**；其余页面均为"渲染一帧 → 输入 → 下一帧"
-- 改造规矩：handler 输出全部走 `_show_message(lines)`/`_input_lines(prompt)`，文案与逻辑顺序零改动
+- 改造规矩：handler 输出全部走 `ui.print_line()`/`ui.prompt()`，文案与逻辑顺序零改动
 
 ### 扫码（scanner.py）
 - 仅支持 TOTP；HOTP 等抛 `UnsupportedOTPTypeError`（CLI 给出明确类型提示）；图片含多码时优先返回 totp
@@ -106,4 +106,4 @@ mini2fa get -p <password> <id>
 - 版本号两处同步：pyproject.toml 的 `[project] version` 与 `src/mini2fa/__init__.py` 的 `__version__`
 - 构建前确认 LICENSE 存在（pyproject 的 license-files 引用它）
 - PyPI 不允许重复上传同名同版本；发布后发现问题需升版本号再传
-- 已知不一致：README 末尾 License 仍写 MIT，与 pyproject.toml 的 GPL-3.0-or-later 不符（doc/ISSUES.md 未追踪此问题）
+- License：GPL-3.0-or-later（README.md、pyproject.toml、LICENSE 文件一致）
