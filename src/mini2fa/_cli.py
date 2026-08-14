@@ -301,6 +301,7 @@ def handle_view_code(storage: StorageManager):
             idx = int(raw)
             if idx < 1 or idx > len(accounts):
                 ui.print_line("✗ 无效的选择！")
+                ui.prompt("\n按 Enter 继续 ")
                 continue
             account = accounts[idx - 1]
         else:
@@ -315,6 +316,7 @@ def handle_view_code(storage: StorageManager):
             searching = True
             if not accounts:
                 ui.print_line("✗ 未找到匹配账号，已返回全量列表。")
+                ui.prompt("\n按 Enter 继续 ")
                 accounts = all_accounts
                 searching = False
             continue
@@ -322,6 +324,7 @@ def handle_view_code(storage: StorageManager):
             secret = storage.get_secret(account.id)
         except Exception as e:
             ui.print_line(f"✗ 获取密钥失败: {e}")
+            ui.prompt("\n按 Enter 继续 ")
             continue
 
         # 进入详情页
@@ -930,7 +933,7 @@ def _main_inner():
                 if hint:
                     ui.print_line(f"💡 密码提示：{hint}")
         else:
-            ui.print_line("✗ 密码错误")
+            ui.print_line("✗ 密码错误次数过多，程序将退出")
             import time
             time.sleep(1.5)
             sys.exit(1)
