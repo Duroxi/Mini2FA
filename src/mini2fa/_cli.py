@@ -900,6 +900,8 @@ def _main_inner():
         else:
             ui.print_line(f"\n✗ 主密码设置失败：已尝试 {MAX_PASSWORD_ATTEMPTS} 次。")
             ui.print_line("  请重新运行 mini2fa 重新设置。")
+            import time
+            time.sleep(1.5)
             sys.exit(1)
 
         # 设置密保提示
@@ -909,6 +911,8 @@ def _main_inner():
             ui.print_line("✓ 主密码已设置成功！")
         else:
             ui.print_line("✗ 初始化失败！")
+            import time
+            time.sleep(1.5)
             sys.exit(1)
     else:
         # 获取密保提示
@@ -927,6 +931,8 @@ def _main_inner():
                     ui.print_line(f"💡 密码提示：{hint}")
         else:
             ui.print_line("✗ 密码错误")
+            import time
+            time.sleep(1.5)
             sys.exit(1)
 
     # 初始化存储管理器
@@ -978,6 +984,8 @@ def _run():
     except StorageCorruptedError as e:
         ui.print_line(f"\n✗ {e}")
         ui.print_line("  请检查数据文件是否完整，或从备份恢复。")
+        import time
+        time.sleep(1.5)
         sys.exit(1)
 
 
