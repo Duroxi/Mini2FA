@@ -731,7 +731,6 @@ def _build_parser() -> argparse.ArgumentParser:
         '-p', '--password', metavar='PASSWORD', required=True,
         help='主密码',
     )
-    list_cmd.add_argument('--json', action='store_true', help='JSON 格式输出')
 
     # get 子命令（-p 在子命令后面）
     get_cmd = sub.add_parser('get', help='获取验证码')
@@ -740,7 +739,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help='主密码',
     )
     get_cmd.add_argument('id', type=int, help='账号 ID（从 list 获取）')
-    get_cmd.add_argument('--json', action='store_true', help='JSON 格式输出（含issuer/account/remaining）')
 
     return parser
 
@@ -758,11 +756,11 @@ def main(argv=None):
 
     # 子命令模式：直接执行，不进 TUI
     if args.command == 'list':
-        _handle_list(args.password, json_format=args.json)
+        _handle_list(args.password)
         return
 
     if args.command == 'get':
-        _handle_get(args.password, args.id, json_format=args.json)
+        _handle_get(args.password, args.id)
         return
 
     # 交互模式（TUI）
@@ -778,13 +776,11 @@ def main(argv=None):
         ui.leave()
 
 
-def _handle_list(password: str, json_format: bool = False):
+def _handle_list(password: str):
     """子命令 list：列出所有账号（ID + issuer + account）
 
-    零交互：密码通过参数传入，输出纯文本或 JSON。
+    零交互：密码通过参数传入，输出纯文本。
     """
-    import sqlite3
-
     # 初始化数据目录（确保存在）
     init_data_dir()
 
@@ -817,33 +813,17 @@ def _handle_list(password: str, json_format: bool = False):
 
     categories = sorted(groups.keys(), key=lambda c: (c != 'default', c))
 
-    if json_format:
-        import json
-        result = []
-        for category in categories:
-            for acc in groups[category]:
-                result.append({
-                    'id': acc.id,
-                    'issuer': acc.issuer,
-                    'account': acc.account,
-                    'category': acc.category,
-                })
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:
-        ordered = []
-        for category in categories:
-            print(f"\n  [{category}]")
-            for acc in groups[category]:
-                print(f"    {acc.id:3d}. {acc.issuer} - {acc.account}")
+    for category in categories:
+        print(f"\n  [{category}]")
+        for acc in groups[category]:
+            print(f"    {acc.id:3d}. {acc.issuer} - {acc.account}")
 
 
-def _handle_get(password: str, account_id: int, json_format: bool = False):
+def _handle_get(password: str, account_id: int):
     """子命令 get：用 ID 获取验证码
 
-    零交互：密码通过参数传入，输出纯数字或 JSON。
+    零交互：密码通过参数传入，输出简洁一行式。
     """
-    import json
-
     # 初始化数据目录（确保存在）
     init_data_dir()
 
@@ -874,19 +854,8 @@ def _handle_get(password: str, account_id: int, json_format: bool = False):
     code = generate_totp(secret, account.algorithm, account.digits, account.period)
     remaining = get_remaining_seconds(account.period)
 
-    if json_format:
-        result = {
-            'id': account.id,
-            'issuer': account.issuer,
-            'account': account.account,
-            'code': code,
-            'period': account.period,
-            'remaining': remaining,
-        }
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:
-        # 默认简洁一行式：issuer - account: code (remaining)
-        print(f"{account.issuer} - {account.account}: {code} ({remaining}s)")
+    # 简洁一行式：issuer - account: code (remaining)
+    print(f"{account.issuer} - {account.account}: {code} ({remaining}s)")
 
 
 def _main_inner():
