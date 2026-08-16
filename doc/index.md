@@ -177,3 +177,13 @@ Mini2FA 使用 [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html) 许
 - **GitHub**: https://github.com/Duroxi/Mini2FA
 - **PyPI**: https://pypi.org/project/mini2fa/
 - **问题反馈**: https://github.com/Duroxi/Mini2FA/issues
+
+```{toctree}
+:maxdepth: 2
+:hidden:
+
+usage
+api
+development
+faq
+```
